@@ -1,0 +1,9 @@
+# Appended to openspec/config.yaml by /workflow-init.
+# Per-artifact rules the AI must satisfy when generating proposals/tasks.
+rules:
+  proposal:
+    - Always include a "Non-goals" section
+    - State explicitly which project guardrails the change touches and how it complies
+  tasks:
+    - Each task must be independently verifiable (lint / types / test or a stated manual check)
+    - No task may be marked done until the verification gate is green
