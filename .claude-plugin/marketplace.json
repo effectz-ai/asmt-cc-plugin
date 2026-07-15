@@ -1,0 +1,11 @@
+{
+  "name": "spec-lane-workflow",
+  "owner": { "name": "sano" },
+  "plugins": [
+    {
+      "name": "spec-lane-workflow",
+      "source": "./spec-lane-workflow",
+      "description": "Spec-before-code, lane-sized AI dev workflow (OpenSpec + Claude Code + a hard verification gate), installable into any project."
+    }
+  ]
+}
