@@ -86,6 +86,19 @@ claude plugin validate .              # check plugin + marketplace manifests
 /reload-plugins
 ```
 
+### Versioning: intentionally unversioned
+
+`plugin.json` deliberately has **no `version` field**, and it should stay that way. For a
+git-hosted plugin, omitting it makes Claude Code treat **every commit as a new version**, so
+`/plugin marketplace update` picks up changes with no manual bump.
+
+Adding a `version` *pins* the plugin: pushing new commits without changing that string does
+nothing for existing users — Claude Code sees the same version and keeps the cached copy. Never
+set `version` in both `plugin.json` and the marketplace entry either; `plugin.json` silently wins.
+
+`claude plugin validate` emits a "No version specified" **warning** for this. That warning is
+expected and safe to ignore.
+
 ## Repo layout
 
 ```

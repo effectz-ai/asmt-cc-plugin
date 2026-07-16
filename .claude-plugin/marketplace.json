@@ -1,7 +1,7 @@
 {
   "name": "asmt-cc-plugin",
   "description": "ASMT Claude Code plugin: an installable spec-before-code AI dev workflow — three effort lanes, a hard verification gate, archive-on-merge living specs.",
-  "owner": { "name": "sano" },
+  "owner": { "name": "effectz-ai" },
   "plugins": [
     {
       "name": "asmt",

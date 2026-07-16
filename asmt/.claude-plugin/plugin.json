@@ -1,6 +1,5 @@
 {
   "name": "asmt",
-  "version": "0.2.0",
   "description": "ASMT AI-dev workflow: spec-before-code on top of OpenSpec + Claude Code — three effort lanes, a hard verification gate, archive-on-merge living specs, and a feedback loop. Run /asmt:workflow-init to configure it to a project.",
   "author": { "name": "sano" },
   "keywords": ["asmt", "openspec", "workflow", "spec-driven", "ci-gate", "claude-code"]
