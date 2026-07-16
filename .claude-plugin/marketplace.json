@@ -1,5 +1,6 @@
 {
   "name": "spec-lane-workflow",
+  "description": "Installable spec-before-code AI dev workflow for Claude Code: three effort lanes, a hard verification gate, archive-on-merge living specs.",
   "owner": { "name": "sano" },
   "plugins": [
     {

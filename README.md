@@ -27,8 +27,9 @@ into any project. It's a thin opinionated layer over two things you already inst
 scripts), asks for the few things it can't infer (gate command, branches, card tool), and
 writes the config **without clobbering** what's already there.
 
-Prerequisites: a git repo, Node, the OpenSpec CLI (`npm i -g openspec` or `npx openspec`),
-and Claude Code.
+Prerequisites: a git repo, Node, Claude Code, and the OpenSpec CLI — install the **scoped**
+package: `npm i -g @fission-ai/openspec` (or `npx @fission-ai/openspec`). Note the bare
+`openspec` npm name is an unrelated, abandoned placeholder — don't install it.
 
 ## What `/workflow-init` writes
 
@@ -52,10 +53,21 @@ Everything else is copied verbatim. Only these vary by project and are asked/det
 
 ## Caveats
 
-- Assumes a **JS/TS** toolchain for the CI template (Node + pnpm setup). For other stacks,
-  supply your own gate command at init and adjust `verify.yml`'s setup steps.
+- Assumes a **JS/TS** toolchain for the CI template (Node + the detected package manager —
+  pnpm/npm/yarn/bun). For non-JS stacks, supply your own gate command at init and adjust
+  `verify.yml`'s setup steps.
 - The workflow's *content* (lanes, gate discipline, archive, feedback) is language-agnostic;
   only the gate wiring is stack-specific.
+
+## Developing this plugin
+
+While iterating, refresh the local cache and validate before publishing:
+
+```
+claude plugin validate .              # check plugin + marketplace manifests
+/plugin marketplace update spec-lane-workflow
+/plugin install spec-lane-workflow    # reinstall the refreshed version
+```
 
 ## Repo layout
 
