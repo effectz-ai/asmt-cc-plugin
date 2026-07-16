@@ -1,5 +1,7 @@
 # ASMT-CC-plugin
 
+[![repo](https://img.shields.io/badge/github-effectz--ai%2Fasmt--cc--plugin-blue)](https://github.com/effectz-ai/asmt-cc-plugin)
+
 The **ASMT** Claude Code plugin: installs a spec-before-code, lane-sized AI development workflow
 into any project. It's a thin opinionated layer over two things you already install —
 [OpenSpec](https://github.com/Fission-AI/OpenSpec) and Claude Code — not a framework.
@@ -20,7 +22,7 @@ Commands and skills are namespaced under `asmt:` (e.g. `/asmt:workflow-init`).
 ## Install
 
 ```
-/plugin marketplace add <your-org>/ASMT-CC-plugin
+/plugin marketplace add effectz-ai/asmt-cc-plugin
 /plugin install asmt@asmt-cc-plugin
 /asmt:workflow-init
 ```
@@ -63,7 +65,19 @@ Everything else is copied verbatim. Only these vary by project and are asked/det
 
 ## Developing this plugin
 
-While iterating, refresh the local cache and validate before publishing:
+```
+git clone https://github.com/effectz-ai/asmt-cc-plugin.git
+cd asmt-cc-plugin
+```
+
+Point Claude Code at your local checkout instead of the remote, then iterate:
+
+```
+/plugin marketplace add <path-to>/asmt-cc-plugin   # local checkout
+/plugin install asmt@asmt-cc-plugin
+```
+
+After editing plugin files, validate and refresh the cache:
 
 ```
 claude plugin validate .              # check plugin + marketplace manifests
