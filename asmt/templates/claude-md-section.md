@@ -1,7 +1,7 @@
-<!-- spec-lane-workflow:start -->
+<!-- asmt:start -->
 ## AI-Dev workflow
 
-This project uses the **spec-lane workflow** (OpenSpec + Claude Code). Read
+This project uses the **ASMT workflow** (OpenSpec + Claude Code). Read
 `docs/process/ai-dev-workflow-standard.md` before opening a card, branch, or PR.
 
 Essentials:
@@ -17,4 +17,4 @@ Essentials:
 - **Never send client/production data through an agent** — source code only. Secrets are
   referenced by env-var name and resolved server-side, never inlined; sensitive files are
   blocked at the tool level in `.claude/settings.json`.
-<!-- spec-lane-workflow:end -->
+<!-- asmt:end -->
