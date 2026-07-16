@@ -1,7 +1,0 @@
-{
-  "name": "spec-lane-workflow",
-  "version": "0.1.1",
-  "description": "Spec-before-code, lane-sized AI dev workflow on top of OpenSpec + Claude Code: three effort lanes, a hard verification gate, archive-on-merge living specs, and a feedback loop. Install and run /workflow-init to configure it to a project.",
-  "author": { "name": "sano" },
-  "keywords": ["openspec", "workflow", "spec-driven", "ci-gate", "claude-code"]
-}

@@ -1,9 +1,9 @@
 ---
 name: "workflow-init"
-description: Configure the spec-lane AI-dev workflow into the current project (OpenSpec + gate + settings + docs), parameterized to its stack.
+description: Configure the ASMT AI-dev workflow into the current project (OpenSpec + gate + settings + docs), parameterized to its stack.
 ---
 
-Scaffold the spec-lane workflow into **this** project. Portable pieces are copied verbatim;
+Scaffold the ASMT workflow into **this** project. Portable pieces are copied verbatim;
 stack-specific pieces are filled from detection + a short prompt. **Never clobber** existing
 config — merge into it.
 
@@ -65,7 +65,7 @@ Templates live at `${CLAUDE_PLUGIN_ROOT}/templates/`.
      obvious), and the gate command — leaving explicit `TODO` markers only for domain + guardrails you
      can't infer. Don't overwrite a `context:` the user has already written.
    - `CLAUDE.md` — the section in `templates/claude-md-section.md` is wrapped in
-     `<!-- spec-lane-workflow:start -->` … `<!-- spec-lane-workflow:end -->` markers. If those markers
+     `<!-- asmt:start -->` … `<!-- asmt:end -->` markers. If those markers
      already exist, **replace between them**; otherwise append the section. Never append a second copy.
    - `docs/process/ai-dev-workflow-standard.md` ← copy `templates/ai-dev-workflow-standard.md`,
      replacing the gate/branch/card-tool placeholders.

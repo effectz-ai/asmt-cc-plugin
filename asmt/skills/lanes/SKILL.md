@@ -3,7 +3,7 @@ name: lanes
 description: Size an AI-dev change into a Fast / Standard / Deep lane and follow that lane's spec-before-code flow with a hard verification gate. Use when starting a card, feature, bug fix, or any change, or when deciding how much process a change needs, or when opening a PR under this workflow.
 ---
 
-# Spec-lane workflow discipline
+# ASMT workflow discipline
 
 Every change is sized into a **lane** before work starts. The lane sets how much process
 the change pays for. Don't push a doc fix through the same ceremony as a new subsystem, and

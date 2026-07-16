@@ -1,13 +1,15 @@
-# spec-lane-workflow
+# ASMT-CC-plugin
 
-A Claude Code **plugin** that installs a spec-before-code, lane-sized AI development workflow
+The **ASMT** Claude Code plugin: installs a spec-before-code, lane-sized AI development workflow
 into any project. It's a thin opinionated layer over two things you already install —
 [OpenSpec](https://github.com/Fission-AI/OpenSpec) and Claude Code — not a framework.
+
+Commands and skills are namespaced under `asmt:` (e.g. `/asmt:workflow-init`).
 
 ## What you get
 
 - **Three lanes** (Fast / Standard / Deep) so a doc fix doesn't pay the same ceremony as a
-  new subsystem. Enforced by the bundled `lanes` skill.
+  new subsystem. Enforced by the bundled `asmt:lanes` skill.
 - **A hard verification gate** in two places: locally before a PR, and in CI (`verify.yml`).
   No PR merges red.
 - **Archive-on-merge living specs** and a **feedback loop** (recurring review findings become
@@ -18,28 +20,28 @@ into any project. It's a thin opinionated layer over two things you already inst
 ## Install
 
 ```
-/plugin marketplace add <your-org>/spec-lane-workflow
-/plugin install spec-lane-workflow
-/workflow-init
+/plugin marketplace add <your-org>/ASMT-CC-plugin
+/plugin install asmt@asmt-cc-plugin
+/asmt:workflow-init
 ```
 
-`/workflow-init` detects your stack (package manager, monorepo tool, lint/typecheck/test
+`/asmt:workflow-init` detects your stack (package manager, monorepo tool, lint/typecheck/test
 scripts), asks for the few things it can't infer (gate command, branches, card tool), and
-writes the config **without clobbering** what's already there.
+writes the config **without clobbering** what's already there. It's safe to re-run.
 
 Prerequisites: a git repo, Node, Claude Code, and the OpenSpec CLI — install the **scoped**
 package: `npm i -g @fission-ai/openspec` (or `npx @fission-ai/openspec`). Note the bare
 `openspec` npm name is an unrelated, abandoned placeholder — don't install it.
 
-## What `/workflow-init` writes
+## What `/asmt:workflow-init` writes
 
 | File | Action |
 | :-- | :-- |
-| `openspec/` | `openspec init` (skipped if present) |
-| `.github/workflows/verify.yml` | the CI gate, with your gate command |
+| `openspec/` | `openspec init --tools claude` (skipped if present) |
+| `.github/workflows/verify.yml` | the CI gate, with your gate command + package manager |
 | `.claude/settings.json` | merges the security deny-list |
-| `openspec/config.yaml` | appends the `rules:` block (you fill `context:`) |
-| `CLAUDE.md` | appends the workflow section |
+| `openspec/config.yaml` | appends the `rules:` block; drafts a starter `context:` |
+| `CLAUDE.md` | inserts the workflow section between `<!-- asmt:start/end -->` markers |
 | `docs/process/ai-dev-workflow-standard.md` | the full process doc |
 
 ## Config surface (the per-project part)
@@ -65,17 +67,18 @@ While iterating, refresh the local cache and validate before publishing:
 
 ```
 claude plugin validate .              # check plugin + marketplace manifests
-/plugin marketplace update spec-lane-workflow
-/plugin install spec-lane-workflow    # reinstall the refreshed version
+/plugin marketplace update asmt-cc-plugin
+/plugin install asmt@asmt-cc-plugin   # reinstall the refreshed version
+/reload-plugins
 ```
 
 ## Repo layout
 
 ```
-.claude-plugin/marketplace.json      # marketplace manifest
-spec-lane-workflow/
+.claude-plugin/marketplace.json      # marketplace manifest (name: asmt-cc-plugin)
+asmt/                                # the plugin (name: asmt -> /asmt:* commands)
   .claude-plugin/plugin.json         # plugin manifest
-  commands/workflow-init.md          # the init command
-  skills/lanes/SKILL.md              # lane + gate discipline (model-invoked)
-  templates/                         # files /workflow-init copies in
+  commands/workflow-init.md          # -> /asmt:workflow-init
+  skills/lanes/SKILL.md              # -> asmt:lanes (model-invoked)
+  templates/                         # files /asmt:workflow-init copies in
 ```

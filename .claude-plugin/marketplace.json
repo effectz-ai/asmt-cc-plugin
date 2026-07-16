@@ -1,11 +1,11 @@
 {
-  "name": "spec-lane-workflow",
-  "description": "Installable spec-before-code AI dev workflow for Claude Code: three effort lanes, a hard verification gate, archive-on-merge living specs.",
+  "name": "asmt-cc-plugin",
+  "description": "ASMT Claude Code plugin: an installable spec-before-code AI dev workflow — three effort lanes, a hard verification gate, archive-on-merge living specs.",
   "owner": { "name": "sano" },
   "plugins": [
     {
-      "name": "spec-lane-workflow",
-      "source": "./spec-lane-workflow",
+      "name": "asmt",
+      "source": "./asmt",
       "description": "Spec-before-code, lane-sized AI dev workflow (OpenSpec + Claude Code + a hard verification gate), installable into any project."
     }
   ]
