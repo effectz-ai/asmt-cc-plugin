@@ -1,0 +1,20 @@
+{
+  "name": "asmt-cc-plugin",
+  "interface": {
+    "displayName": "ASMT"
+  },
+  "plugins": [
+    {
+      "name": "asmt",
+      "source": {
+        "source": "local",
+        "path": "./asmt"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

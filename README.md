@@ -1,12 +1,12 @@
-# ASMT-CC-plugin
+# ASMT plugin for Claude Code and Codex
 
 [![repo](https://img.shields.io/badge/github-effectz--ai%2Fasmt--cc--plugin-blue)](https://github.com/effectz-ai/asmt-cc-plugin)
 
-The **ASMT** Claude Code plugin: installs a spec-before-code, lane-sized AI development workflow
-into any project. It's a thin opinionated layer over two things you already install —
-[OpenSpec](https://github.com/Fission-AI/OpenSpec) and Claude Code — not a framework.
+The **ASMT** plugin packages a spec-before-code, lane-sized AI development workflow for
+Claude Code and Codex. It is a thin opinionated layer over
+[OpenSpec](https://github.com/Fission-AI/OpenSpec) and your coding agent, not a framework.
 
-Commands and skills are namespaced under `asmt:` (e.g. `/asmt:workflow-init`).
+ASMT components are namespaced by the plugin: `/asmt:*` in Claude Code and `$asmt:*` in Codex.
 
 ## What you get
 
@@ -16,10 +16,13 @@ Commands and skills are namespaced under `asmt:` (e.g. `/asmt:workflow-init`).
   No PR merges red.
 - **Archive-on-merge living specs** and a **feedback loop** (recurring review findings become
   `openspec/config.yaml` rules or skills).
-- **Security defaults**: a `.claude/settings.json` deny-list blocking `.env*`, `*.pem`, `*.key`,
-  `secrets/`, etc. at the tool level.
+- **Claude security defaults**: a `.claude/settings.json` deny-list blocking `.env*`, `*.pem`,
+  `*.key`, `secrets/`, etc. at the tool level. Codex security policy support arrives with the
+  shared initializer migration.
 
 ## Install
+
+### Claude Code
 
 ```
 /plugin marketplace add effectz-ai/asmt-cc-plugin
@@ -27,15 +30,25 @@ Commands and skills are namespaced under `asmt:` (e.g. `/asmt:workflow-init`).
 /asmt:workflow-init
 ```
 
+### Codex
+
+```bash
+codex plugin marketplace add effectz-ai/asmt-cc-plugin
+codex plugin add asmt@asmt-cc-plugin
+```
+
+Start a new Codex task after installation, then invoke `$asmt:lanes`. The project initializer
+remains Claude-only until it is migrated to a shared skill.
+
 `/asmt:workflow-init` detects your stack (package manager, monorepo tool, lint/typecheck/test
 scripts), asks for the few things it can't infer (gate command, branches, card tool), and
 writes the config **without clobbering** what's already there. It's safe to re-run.
 
-Prerequisites: a git repo, Node, Claude Code, and the OpenSpec CLI — install the **scoped**
-package: `npm i -g @fission-ai/openspec` (or `npx @fission-ai/openspec`). Note the bare
-`openspec` npm name is an unrelated, abandoned placeholder — don't install it.
+Workflow prerequisites: a Git repository, Node, and the OpenSpec CLI. Install the **scoped**
+package with `npm i -g @fission-ai/openspec` or run it through
+`npx @fission-ai/openspec`. The bare `openspec` npm name is unrelated; do not install it.
 
-## What `/asmt:workflow-init` writes
+## What the Claude initializer writes
 
 | File | Action |
 | :-- | :-- |
@@ -70,14 +83,27 @@ git clone https://github.com/effectz-ai/asmt-cc-plugin.git
 cd asmt-cc-plugin
 ```
 
-Point Claude Code at your local checkout instead of the remote, then iterate:
+Point Claude Code at your local checkout instead of the remote:
 
 ```
 /plugin marketplace add <path-to>/asmt-cc-plugin   # local checkout
 /plugin install asmt@asmt-cc-plugin
 ```
 
-After editing plugin files, validate and refresh the cache:
+Add the same checkout as a local Codex marketplace:
+
+```bash
+codex plugin marketplace add <path-to>/asmt-cc-plugin
+codex plugin add asmt@asmt-cc-plugin
+```
+
+Run the shared packaging contract before platform-specific validation:
+
+```bash
+node scripts/validate-packaging.mjs
+```
+
+For Claude Code, validate and refresh the cache:
 
 ```
 claude plugin validate .              # check plugin + marketplace manifests
@@ -86,11 +112,15 @@ claude plugin validate .              # check plugin + marketplace manifests
 /reload-plugins
 ```
 
-### Versioning: intentionally unversioned
+For Codex, use the built-in `$plugin-creator` update flow to apply a temporary build-metadata
+cachebuster, reinstall `asmt@asmt-cc-plugin`, and start a new task. Restore the release version
+before committing.
 
-`plugin.json` deliberately has **no `version` field**, and it should stay that way. For a
-git-hosted plugin, omitting it makes Claude Code treat **every commit as a new version**, so
-`/plugin marketplace update` picks up changes with no manual bump.
+### Platform versioning
+
+`asmt/.claude-plugin/plugin.json` deliberately has **no `version` field**, and it should stay
+that way. For a git-hosted Claude plugin, omitting it makes every commit a new version, so
+`/plugin marketplace update` picks up changes without a manual bump.
 
 Adding a `version` *pins* the plugin: pushing new commits without changing that string does
 nothing for existing users — Claude Code sees the same version and keeps the cached copy. Never
@@ -99,13 +129,20 @@ set `version` in both `plugin.json` and the marketplace entry either; `plugin.js
 `claude plugin validate` emits a "No version specified" **warning** for this. That warning is
 expected and safe to ignore.
 
+`asmt/.codex-plugin/plugin.json` follows strict semantic versioning, beginning at `0.1.0`.
+Release changes bump that version. Local Codex cachebusters use build metadata and are never
+committed.
+
 ## Repo layout
 
 ```
 .claude-plugin/marketplace.json      # marketplace manifest (name: asmt-cc-plugin)
-asmt/                                # the plugin (name: asmt -> /asmt:* commands)
-  .claude-plugin/plugin.json         # plugin manifest
+.agents/plugins/marketplace.json     # native Codex marketplace with the same identity
+asmt/                                # shared plugin root (name: asmt)
+  .claude-plugin/plugin.json         # unversioned Claude manifest
+  .codex-plugin/plugin.json          # semver Codex manifest
   commands/workflow-init.md          # -> /asmt:workflow-init
-  skills/lanes/SKILL.md              # -> asmt:lanes (model-invoked)
+  skills/lanes/SKILL.md              # -> /asmt:lanes and $asmt:lanes
   templates/                         # files /asmt:workflow-init copies in
+scripts/validate-packaging.mjs       # cross-platform packaging contract
 ```

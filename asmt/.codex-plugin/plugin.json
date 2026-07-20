@@ -1,0 +1,38 @@
+{
+  "name": "asmt",
+  "version": "0.1.0",
+  "description": "ASMT packages a spec-before-code, lane-sized AI development workflow for Claude Code and Codex.",
+  "author": {
+    "name": "effectz-ai",
+    "url": "https://github.com/effectz-ai"
+  },
+  "homepage": "https://github.com/effectz-ai/asmt-cc-plugin#readme",
+  "repository": "https://github.com/effectz-ai/asmt-cc-plugin",
+  "license": "MIT",
+  "keywords": [
+    "asmt",
+    "openspec",
+    "workflow",
+    "spec-driven",
+    "ci-gate",
+    "claude-code",
+    "codex"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "ASMT",
+    "shortDescription": "Lane-sized, spec-before-code delivery workflow",
+    "longDescription": "Apply Fast, Standard, or Deep delivery lanes with OpenSpec, a hard verification gate, living specs, and a review feedback loop.",
+    "developerName": "effectz-ai",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/effectz-ai/asmt-cc-plugin",
+    "defaultPrompt": [
+      "Use ASMT to choose the right delivery lane for this change.",
+      "Use ASMT to explain the lane workflow for this repository."
+    ]
+  }
+}
