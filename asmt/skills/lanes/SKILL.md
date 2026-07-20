@@ -9,19 +9,30 @@ Every change is sized into a **lane** before work starts. The lane sets how much
 the change pays for. Don't push a doc fix through the same ceremony as a new subsystem, and
 don't sneak a subsystem through the Fast lane.
 
+Use the invocation native to the active host:
+
+| Action | Claude Code | Codex |
+| :-- | :-- | :-- |
+| Choose a lane | `/asmt:lanes` | `$asmt:lanes` |
+| Explore | `/opsx:explore` | `$openspec-explore` |
+| Propose | `/opsx:propose` | `$openspec-propose` |
+| Apply | `/opsx:apply` | `$openspec-apply-change` |
+| Archive | `/opsx:archive` or `openspec archive <change-id>` | `$openspec-archive-change` or `openspec archive <change-id>` |
+
 ## Pick the lane
 
 | Lane | Use when | Flow |
 | :-- | :-- | :-- |
 | **Fast** | Docs, config, deps, small fixes with **no spec delta** | implement → gate → self-review → PR → CI gate → human review → merge |
-| **Standard** (default) | One capability / spec area; the design is obvious | `/opsx:propose` → **one combined human review** → `/opsx:apply` → gate → self-review → PR → CI gate → model review → human review → merge → archive |
+| **Standard** (default) | One capability / spec area; the design is obvious | OpenSpec propose → **one combined human review** → OpenSpec apply → gate → self-review → PR → CI gate → model review → human review → merge → archive |
 | **Deep** | New subsystem, cross-cutting, or guardrail-adjacent | Standard **plus** a separate design review before tasks are approved |
 
 If unsure between two lanes, take the higher one. Any reviewer can bump a mislabeled card up a lane.
 
 ## Non-negotiables (every lane)
 
-1. **Spec before code** (Standard/Deep): no implementation until `/opsx:propose` output
+1. **Spec before code** (Standard/Deep): no implementation until the active host's OpenSpec
+   propose output
    (proposal + design + delta spec + tasks) is human-approved.
 2. **The gate is hard.** Before opening a PR, the project's gate command must be green
    locally, and for any change with a runtime surface, drive the real flow to confirm it
@@ -30,8 +41,8 @@ If unsure between two lanes, take the higher one. Any reviewer can bump a mislab
 3. **Archive on merge.** After merge, run `openspec archive <change-id>` so the delta folds
    into `openspec/specs/` (living specs). A merged-but-unarchived change is a bug.
 4. **Feed the loop.** If human review catches something the spec/model review should have,
-   encode it — a `rules:` entry in `openspec/config.yaml`, a line in `CLAUDE.md`, or a
-   review-skill check — so it doesn't recur. Don't re-litigate the same finding in PRs.
+   encode it - a `rules:` entry in `openspec/config.yaml`, a line in `CLAUDE.md` or `AGENTS.md`,
+   or a review-skill check - so it doesn't recur. Don't re-litigate the same finding in PRs.
 
 ## Roles
 - **Card creator** owns the combined review (Standard) / spec review.

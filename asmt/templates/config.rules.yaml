@@ -1,4 +1,4 @@
-# Appended to openspec/config.yaml by /workflow-init.
+# Merged into the active OpenSpec config by the ASMT workflow initializer.
 # Per-artifact rules the AI must satisfy when generating proposals/tasks.
 rules:
   proposal:

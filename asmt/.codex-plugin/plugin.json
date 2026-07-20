@@ -31,6 +31,7 @@
     ],
     "websiteURL": "https://github.com/effectz-ai/asmt-cc-plugin",
     "defaultPrompt": [
+      "Use $asmt:workflow-init to configure ASMT in this repository.",
       "Use ASMT to choose the right delivery lane for this change.",
       "Use ASMT to explain the lane workflow for this repository."
     ]

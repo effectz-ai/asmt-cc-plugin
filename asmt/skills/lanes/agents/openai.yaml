@@ -1,0 +1,7 @@
+interface:
+  display_name: "Choose ASMT Lane"
+  short_description: "Select the right ASMT delivery lane"
+  default_prompt: "Use $asmt:lanes to select the delivery lane for this change."
+
+policy:
+  allow_implicit_invocation: true

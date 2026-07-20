@@ -1,0 +1,23 @@
+default_permissions = "asmt-workspace"
+
+[permissions.asmt-workspace]
+description = "Workspace access with ASMT sensitive-file protections."
+extends = ":workspace"
+
+[permissions.asmt-workspace.filesystem]
+glob_scan_max_depth = 8
+
+[permissions.asmt-workspace.filesystem.":workspace_roots"]
+"**/.env" = "deny"
+"**/.env.*" = "deny"
+"**/*.env" = "deny"
+"**/*.env.*" = "deny"
+"**/*.pem" = "deny"
+"**/*.key" = "deny"
+"**/*.p12" = "deny"
+"**/*.pfx" = "deny"
+"**/*.crt" = "deny"
+"**/*.cer" = "deny"
+"**/secrets" = "deny"
+"**/secrets/**" = "deny"
+"**/*.local" = "deny"

@@ -2,29 +2,32 @@
 
 [![repo](https://img.shields.io/badge/github-effectz--ai%2Fasmt--cc--plugin-blue)](https://github.com/effectz-ai/asmt-cc-plugin)
 
-The **ASMT** plugin packages a spec-before-code, lane-sized AI development workflow for
+The **ASMT** plugin packages one spec-before-code, lane-sized AI development workflow for
 Claude Code and Codex. It is a thin opinionated layer over
-[OpenSpec](https://github.com/Fission-AI/OpenSpec) and your coding agent, not a framework.
+[OpenSpec](https://github.com/Fission-AI/OpenSpec) and the active coding agent, not a framework.
 
-ASMT components are namespaced by the plugin: `/asmt:*` in Claude Code and `$asmt:*` in Codex.
+ASMT components keep the plugin namespace: `/asmt:*` in Claude Code and `$asmt:*` in Codex.
+Both hosts load the same workflow skills and templates.
 
 ## What you get
 
-- **Three lanes** (Fast / Standard / Deep) so a doc fix doesn't pay the same ceremony as a
-  new subsystem. Enforced by the bundled `asmt:lanes` skill.
-- **A hard verification gate** in two places: locally before a PR, and in CI (`verify.yml`).
-  No PR merges red.
-- **Archive-on-merge living specs** and a **feedback loop** (recurring review findings become
-  `openspec/config.yaml` rules or skills).
-- **Claude security defaults**: a `.claude/settings.json` deny-list blocking `.env*`, `*.pem`,
-  `*.key`, `secrets/`, etc. at the tool level. Codex security policy support arrives with the
-  shared initializer migration.
+- **Three lanes** (Fast / Standard / Deep) so a documentation fix does not pay the same ceremony
+  as a new subsystem. The shared `asmt:lanes` skill applies the discipline on both hosts.
+- **One initializer** exposed as `/asmt:workflow-init` in Claude Code and
+  `$asmt:workflow-init` in Codex.
+- **Additive OpenSpec setup** for Claude, Codex, or both without removing an existing host
+  integration.
+- **A hard verification gate** locally before a PR and in `.github/workflows/verify.yml`.
+- **Archive-on-merge living specs** and a feedback loop that turns recurring review findings into
+  OpenSpec rules or durable agent guidance.
+- **Host-native security adapters**: a deep-merged Claude deny list and an optional Codex
+  `asmt-workspace` permission profile.
 
 ## Install
 
 ### Claude Code
 
-```
+```text
 /plugin marketplace add effectz-ai/asmt-cc-plugin
 /plugin install asmt@asmt-cc-plugin
 /asmt:workflow-init
@@ -37,78 +40,150 @@ codex plugin marketplace add effectz-ai/asmt-cc-plugin
 codex plugin add asmt@asmt-cc-plugin
 ```
 
-Start a new Codex task after installation, then invoke `$asmt:lanes`. The project initializer
-remains Claude-only until it is migrated to a shared skill.
+Start a new Codex task after installation, then invoke:
 
-`/asmt:workflow-init` detects your stack (package manager, monorepo tool, lint/typecheck/test
-scripts), asks for the few things it can't infer (gate command, branches, card tool), and
-writes the config **without clobbering** what's already there. It's safe to re-run.
+```text
+$asmt:workflow-init
+```
 
-Workflow prerequisites: a Git repository, Node, and the OpenSpec CLI. Install the **scoped**
-package with `npm i -g @fission-ai/openspec` or run it through
-`npx @fission-ai/openspec`. The bare `openspec` npm name is unrelated; do not install it.
+The initializer is explicit-only on both hosts because it writes repository files. Lane selection
+remains eligible for implicit invocation.
 
-## What the Claude initializer writes
+## Choose the target
+
+With no target argument, the initializer configures the active host and preserves any other
+OpenSpec integration already present. Configure both hosts explicitly with:
+
+| Intent | Claude Code | Codex |
+| :-- | :-- | :-- |
+| Active host | `/asmt:workflow-init` | `$asmt:workflow-init` |
+| Both hosts | `/asmt:workflow-init both` | `$asmt:workflow-init configure both` |
+
+The initializer detects the package manager, Turbo/Nx, Node version source, and real
+lint/typecheck/test scripts. It recovers prior ASMT values on reruns and asks only for unresolved
+or conflicting inputs. The final gate command is always confirmed and is never fabricated from a
+missing package script.
+
+## OpenSpec behavior
+
+Workflow prerequisites are a Git repository, Node.js, and a reachable OpenSpec CLI. ASMT resolves
+the global executable, the project's `node_modules/.bin/openspec`, then the scoped
+`npx --yes @fission-ai/openspec` runner.
+
+Install only the supported scoped package:
+
+```bash
+npm install --global @fission-ai/openspec
+```
+
+The bare `openspec` npm package is unrelated and must not be installed.
+
+Before writing ASMT-owned files, the initializer checks `openspec init --help`, verifies the
+requested `claude` and/or `codex` tool IDs, and checks the complete core artifact set. Missing hosts
+are added with:
+
+```text
+openspec init --profile core --tools <comma-separated-missing-targets>
+```
+
+Existing host integrations are preserved and reverified after the command. ASMT reports every
+OpenSpec-created, refreshed, migrated, or removed file. It never runs `openspec update` unless the
+user explicitly requests an OpenSpec refresh.
+
+## Files written in a project
+
+Common outputs are rendered once and stay platform-neutral:
 
 | File | Action |
 | :-- | :-- |
-| `openspec/` | `openspec init --tools claude` (skipped if present) |
-| `.github/workflows/verify.yml` | the CI gate, with your gate command + package manager |
-| `.claude/settings.json` | merges the security deny-list |
-| `openspec/config.yaml` | appends the `rules:` block; drafts a starter `context:` |
-| `CLAUDE.md` | inserts the workflow section between `<!-- asmt:start/end -->` markers |
-| `docs/process/ai-dev-workflow-standard.md` | the full process doc |
+| `openspec/` | Created or extended by OpenSpec for the missing requested hosts |
+| `.github/workflows/verify.yml` | Installs the confirmed CI gate and detected package-manager setup |
+| `openspec/config.yaml` or existing `config.yml` | Preserves user context/rules and fills only missing ASMT content |
+| `docs/process/ai-dev-workflow-standard.md` | Documents one workflow with a stable Claude/Codex invocation map |
 
-## Config surface (the per-project part)
+Host-specific outputs are thin adapters:
 
-Everything else is copied verbatim. Only these vary by project and are asked/detected at init:
+| Host | Guidance | Security |
+| :-- | :-- | :-- |
+| Claude Code | `CLAUDE.md` ASMT marker block | Deep-merges deny entries into `.claude/settings.json` |
+| Codex | `AGENTS.md` ASMT marker block | Adds the optional `asmt-workspace` profile to `.codex/config.toml` |
 
-- **Gate command** — e.g. `turbo run lint check-types test`, `nx run-many -t lint typecheck test`,
-  or `<pm> run lint && <pm> run typecheck && <pm> run test`.
-- **Branches** — integration (default `dev`) and release (default `main`).
-- **Card tool** — Jira / Linear / Notion / GitHub Issues / none.
+Both guidance files use `<!-- asmt:start -->` and `<!-- asmt:end -->`. Reruns replace only the
+marked block and preserve surrounding user content.
+
+## Codex permission profile
+
+The `asmt-workspace` profile extends Codex's `:workspace` profile and denies environment files,
+private keys, certificates, `secrets/`, and `*.local` files. The initializer never overwrites an
+existing `default_permissions` value and asks before activating the profile.
+
+Activation is skipped when Codex is older than `0.138.0` or legacy `sandbox_mode` /
+`sandbox_workspace_write` settings would take precedence. Because Codex requires a custom profile
+and its selecting default together, a declined or blocked activation leaves `.codex/config.toml`
+unchanged. The profile is reported as installed only after strict config validation; enforcement is
+reported only after a fresh trusted Codex session loads the project config and `/permissions` shows
+`asmt-workspace` selected. Permission profiles are a beta Codex feature; review the current
+[Codex permissions documentation](https://learn.chatgpt.com/docs/permissions).
+
+## Project inputs
+
+Only these values vary by project:
+
+- **Target** - Claude Code, Codex, or both.
+- **Gate command** - built only from real repository scripts or supplied explicitly.
+- **Package manager** - `package.json#packageManager` wins over lockfiles; conflicting lockfiles
+  require a choice.
+- **Branches** - integration defaults to `dev`; release defaults to `main`.
+- **Card tool** - Jira, Linear, Notion, GitHub Issues, or none.
+- **Node source** - `.nvmrc`, `.node-version`, `package.json#engines.node`, or `lts/*`.
+
+The initializer applies explicit input first, then prior ASMT-generated values, repository
+detection, and finally a prompt/default. A repeated run with identical answers must create no diff.
 
 ## Caveats
 
-- Assumes a **JS/TS** toolchain for the CI template (Node + the detected package manager —
-  pnpm/npm/yarn/bun). For non-JS stacks, supply your own gate command at init and adjust
-  `verify.yml`'s setup steps.
-- The workflow's *content* (lanes, gate discipline, archive, feedback) is language-agnostic;
-  only the gate wiring is stack-specific.
+- Automatic CI setup supports JavaScript/TypeScript projects using pnpm, npm, yarn, or bun. A
+  non-JavaScript project must supply its gate and CI setup explicitly.
+- The workflow content is language-agnostic; only the verification wiring is stack-specific.
+- Project `.codex/config.toml` is loaded only for trusted repositories.
+- Plugin removal does not remove files the initializer previously wrote into a project.
 
 ## Developing this plugin
 
-```
+```bash
 git clone https://github.com/effectz-ai/asmt-cc-plugin.git
 cd asmt-cc-plugin
 ```
 
-Point Claude Code at your local checkout instead of the remote:
+Point each host at the local checkout:
 
-```
-/plugin marketplace add <path-to>/asmt-cc-plugin   # local checkout
+```text
+/plugin marketplace add <path-to>/asmt-cc-plugin
 /plugin install asmt@asmt-cc-plugin
 ```
-
-Add the same checkout as a local Codex marketplace:
 
 ```bash
 codex plugin marketplace add <path-to>/asmt-cc-plugin
 codex plugin add asmt@asmt-cc-plugin
 ```
 
-Run the shared packaging contract before platform-specific validation:
+Run the shared contract before platform-specific validation:
 
 ```bash
 node scripts/validate-packaging.mjs
 ```
 
+The shared initializer intentionally carries Claude's `disable-model-invocation: true` and
+Codex's `policy.allow_implicit_invocation: false`. If a Codex-only helper rejects the Claude
+frontmatter field, do not remove it. Validate the installed package through Codex `skills/list`;
+both `asmt:workflow-init` and `asmt:lanes` must be enabled with no load errors.
+
 For Claude Code, validate and refresh the cache:
 
-```
-claude plugin validate .              # check plugin + marketplace manifests
+```text
+claude plugin validate .
 /plugin marketplace update asmt-cc-plugin
-/plugin install asmt@asmt-cc-plugin   # reinstall the refreshed version
+/plugin install asmt@asmt-cc-plugin
 /reload-plugins
 ```
 
@@ -118,31 +193,26 @@ before committing.
 
 ### Platform versioning
 
-`asmt/.claude-plugin/plugin.json` deliberately has **no `version` field**, and it should stay
-that way. For a git-hosted Claude plugin, omitting it makes every commit a new version, so
-`/plugin marketplace update` picks up changes without a manual bump.
-
-Adding a `version` *pins* the plugin: pushing new commits without changing that string does
-nothing for existing users — Claude Code sees the same version and keeps the cached copy. Never
-set `version` in both `plugin.json` and the marketplace entry either; `plugin.json` silently wins.
-
-`claude plugin validate` emits a "No version specified" **warning** for this. That warning is
-expected and safe to ignore.
+`asmt/.claude-plugin/plugin.json` deliberately has **no `version` field**. For a Git-hosted Claude
+plugin, omitting it makes every commit a new version, so marketplace refreshes pick up changes.
+The expected `claude plugin validate` warning about the missing version can be ignored.
 
 `asmt/.codex-plugin/plugin.json` follows strict semantic versioning, beginning at `0.1.0`.
 Release changes bump that version. Local Codex cachebusters use build metadata and are never
 committed.
 
-## Repo layout
+## Repository layout
 
-```
-.claude-plugin/marketplace.json      # marketplace manifest (name: asmt-cc-plugin)
-.agents/plugins/marketplace.json     # native Codex marketplace with the same identity
-asmt/                                # shared plugin root (name: asmt)
-  .claude-plugin/plugin.json         # unversioned Claude manifest
-  .codex-plugin/plugin.json          # semver Codex manifest
-  commands/workflow-init.md          # -> /asmt:workflow-init
-  skills/lanes/SKILL.md              # -> /asmt:lanes and $asmt:lanes
-  templates/                         # files /asmt:workflow-init copies in
-scripts/validate-packaging.mjs       # cross-platform packaging contract
+```text
+.claude-plugin/marketplace.json          # Existing Claude marketplace
+.agents/plugins/marketplace.json         # Codex marketplace with the same identity
+asmt/
+  .claude-plugin/plugin.json             # Intentionally unversioned Claude manifest
+  .codex-plugin/plugin.json              # Semver Codex manifest
+  skills/workflow-init/SKILL.md          # One shared initializer implementation
+  skills/workflow-init/agents/openai.yaml
+  skills/lanes/SKILL.md                  # Shared lane discipline
+  skills/lanes/agents/openai.yaml
+  templates/                             # Shared output and thin host adapter templates
+scripts/validate-packaging.mjs           # Cross-platform packaging/workflow contract
 ```
