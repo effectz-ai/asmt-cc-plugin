@@ -146,7 +146,30 @@ detection, and finally a prompt/default. A repeated run with identical answers m
   non-JavaScript project must supply its gate and CI setup explicitly.
 - The workflow content is language-agnostic; only the verification wiring is stack-specific.
 - Project `.codex/config.toml` is loaded only for trusted repositories.
+- Codex's default workspace sandbox protects `.codex/` recursively. During Codex initialization,
+  OpenSpec may therefore request approval before it can create `.codex/skills/`; declining that
+  approval stops the initializer before ASMT-owned writes.
 - Plugin removal does not remove files the initializer previously wrote into a project.
+
+## Tested compatibility
+
+The `0.1.0` release candidate uses this qualification baseline:
+
+| Component | Tested version | Qualification |
+| :-- | :-- | :-- |
+| Claude Code | Claude Code 2.1.215 | Manifest validation, local marketplace installation, and both shared skills in the installed inventory pass. Authenticated invocation remains a required release gate. |
+| Codex | Codex CLI 0.145.0-alpha.18 | Local marketplace installation, one-entry deduplication, `skills/list`, explicit initializer/lanes invocation, and permission-profile enforcement pass. |
+| OpenSpec | OpenSpec 1.6.0 | The pinned scoped package advertises the `core` profile plus the `claude` and `codex` tool IDs. |
+| Node.js | Node.js 20.19.0 | Minimum release-test and OpenSpec baseline; CI runs the contract matrix on this version. |
+
+Codex marketplace plugins are supported in the ChatGPT desktop app and Codex CLI. Plugin
+installation is **not available in the Codex IDE extension**; use the desktop app or CLI and start
+a new task/session after installing. See the official
+[Codex plugins documentation](https://learn.chatgpt.com/docs/plugins).
+
+Permission profiles require Codex `0.138.0` or newer and remain beta. The profile is optional,
+must be explicitly activated, and cannot compose with legacy `sandbox_mode` or
+`sandbox_workspace_write` settings.
 
 ## Developing this plugin
 
@@ -167,11 +190,36 @@ codex plugin marketplace add <path-to>/asmt-cc-plugin
 codex plugin add asmt@asmt-cc-plugin
 ```
 
-Run the shared contract before platform-specific validation:
+Install the pinned test parsers and run the packaging plus 20-scenario initialization matrix:
 
 ```bash
-node scripts/validate-packaging.mjs
+npm ci
+npm test
 ```
+
+The matrix creates temporary Git repositories for fresh, rerun, merge, decline, malformed-input,
+OpenSpec-failure, and both cross-platform ordering cases. Every successful case commits its first
+result, reruns with identical answers, and requires a clean Git work tree.
+
+Run the external capability and installed-host checks before a release:
+
+```bash
+node scripts/verify-openspec-capabilities.mjs
+npx --yes @anthropic-ai/claude-code@2.1.215 plugin validate .
+npm run test:live -- --codex --claude --permissions
+```
+
+Authenticated release owners must also run explicit fresh-session invocations. The Codex
+initializer needs the opt-in fixture flag because its noninteractive test must write the normally
+protected `.codex/` directory inside a disposable repository:
+
+```bash
+npm run test:live -- --invoke-codex --allow-unsandboxed-fixture
+npm run test:live -- --invoke-claude
+```
+
+Do not merge or tag while either authenticated invocation is unavailable or failing. The complete
+acceptance record is in `docs/release-qualification.md`.
 
 The shared initializer intentionally carries Claude's `disable-model-invocation: true` and
 Codex's `policy.allow_implicit_invocation: false`. If a Codex-only helper rejects the Claude
@@ -215,4 +263,6 @@ asmt/
   skills/lanes/agents/openai.yaml
   templates/                             # Shared output and thin host adapter templates
 scripts/validate-packaging.mjs           # Cross-platform packaging/workflow contract
+scripts/verify-live-hosts.mjs            # Installed-host and permission-profile smoke tests
+tests/initializer-matrix.test.mjs        # Temporary-repository compatibility matrix
 ```

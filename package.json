@@ -1,0 +1,20 @@
+{
+  "name": "asmt-plugin-release-tests",
+  "version": "0.0.0-private",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "test": "npm run validate:packaging && npm run test:matrix",
+    "test:matrix": "node --test tests/initializer-matrix.test.mjs",
+    "test:live": "node scripts/verify-live-hosts.mjs",
+    "validate:packaging": "node scripts/validate-packaging.mjs"
+  },
+  "devDependencies": {
+    "semver": "7.8.5",
+    "smol-toml": "1.7.0",
+    "yaml": "2.9.0"
+  }
+}

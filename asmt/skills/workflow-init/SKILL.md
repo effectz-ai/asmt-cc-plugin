@@ -62,6 +62,7 @@ sequencing are defined in the shared sections below.
 | Reporting label | `Claude Code` | `Codex` |
 | OpenSpec tool ID | `claude` | `codex` |
 | Core artifact root | `.claude/skills/` with `.claude/commands/opsx/` as the command-delivery alternative | `.codex/skills/` |
+| Integration write approval | Use the active Claude Code project-write policy | `.codex/` is protected by Codex's default workspace sandbox; request scoped approval for the exact OpenSpec init command when required |
 | OpenSpec invocations | explore=`/opsx:explore`; propose=`/opsx:propose`; apply=`/opsx:apply`; sync=`/opsx:sync`; archive=`/opsx:archive`; update-change=`/opsx:update` | explore=`$openspec-explore`; propose=`$openspec-propose`; apply=`$openspec-apply-change`; sync=`$openspec-sync-specs`; archive=`$openspec-archive-change`; update-change=`$openspec-update-change` |
 | Review command | `/code-review` | `/review` |
 | Durable guidance | `CLAUDE.md` from `claude-md-section.md` | `AGENTS.md` from `agents-md-section.md` |
@@ -205,6 +206,10 @@ Compute `missing_targets` from the requested targets whose integrations are inco
   ```text
   <runner> init --profile core --tools <comma-separated-missing-targets>
   ```
+
+If the active host protects a mapped integration root, request its native, narrowly scoped write
+approval for that exact command. Never bypass the host sandbox. Treat declined or unavailable
+approval as an OpenSpec failure and stop before ASMT-owned writes.
 
 Do not pass `--force`. Preserve complete requested and non-requested integrations. Never delete a
 host directory before initialization.
