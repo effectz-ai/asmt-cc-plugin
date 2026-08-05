@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Runs every tests/test-* file. New test files are picked up automatically.
+set -uo pipefail
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+failed=0
+
+for t in "$HERE"/test-*; do
+  [ -f "$t" ] || continue
+  printf '\n== %s\n' "$(basename "$t")"
+  bash "$t" || failed=1
+done
+
+[ "$failed" -eq 0 ] && printf '\nall tests passed\n' || printf '\nSOME TESTS FAILED\n'
+exit "$failed"

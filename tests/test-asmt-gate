@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+GATE="$HERE/../plugins/asmt/bin/asmt-gate"
+# shellcheck source=fixtures.sh
+. "$HERE/fixtures.sh"
+
+fails=0
+ok()   { printf 'ok   - %s\n' "$1"; }
+bad()  { printf 'FAIL - %s\n' "$1"; fails=$((fails + 1)); }
+is()   { [ "$2" = "$3" ] && ok "$1" || bad "$1 (expected '$3', got '$2')"; }
+
+run_in() { ( cd "$1" && shift && "$GATE" "$@" >/dev/null 2>&1 ); echo $?; }
+
+# 1. passing verify command exits 0
+repo="$(new_repo true)"
+is "run: passing command exits 0" "$(run_in "$repo" run)" "0"
+
+# 2. and writes a pass receipt keyed to HEAD
+sha="$(head_sha "$repo")"
+receipt="$repo/.asmt/receipts/$sha.json"
+[ -f "$receipt" ] && ok "run: receipt written at HEAD sha" || bad "run: no receipt at $receipt"
+grep -q '"result":"pass"' "$receipt" 2>/dev/null \
+  && ok "run: receipt records pass" || bad "run: receipt missing pass result"
+
+# 3. check accepts a fresh pass receipt
+is "check: accepts fresh pass receipt" "$(run_in "$repo" check)" "0"
+
+# 4. a new commit invalidates the receipt
+( cd "$repo" && echo hi > new.txt && git add -A && git commit -qm "second" )
+is "check: rejects receipt after new commit" "$(run_in "$repo" check)" "1"
+
+# 5. failing verify command exits 1 and records the failure
+repo_fail="$(new_repo false)"
+is "run: failing command exits 1" "$(run_in "$repo_fail" run)" "1"
+grep -q '"result":"fail"' "$repo_fail/.asmt/receipts/$(head_sha "$repo_fail").json" 2>/dev/null \
+  && ok "run: receipt records fail" || bad "run: receipt missing fail result"
+
+# 6. dirty tree is refused, and no receipt is written
+repo_dirty="$(new_repo true)"
+echo dirty > "$repo_dirty/uncommitted.txt"
+is "run: refuses dirty tree" "$(run_in "$repo_dirty" run)" "1"
+[ -f "$repo_dirty/.asmt/receipts/$(head_sha "$repo_dirty").json" ] \
+  && bad "run: wrote a receipt for a dirty tree" || ok "run: no receipt for dirty tree"
+
+# 7. check with no receipt at all, and run with no config
+repo_bare="$(new_repo true)"
+is "check: rejects missing receipt" "$(run_in "$repo_bare" check)" "1"
+rm "$repo_bare/.asmt/config.yml"
+is "run: rejects missing config" "$(run_in "$repo_bare" run)" "1"
+
+[ "$fails" -eq 0 ] || printf '\n%s assertion(s) failed\n' "$fails"
+exit "$((fails > 0))"
