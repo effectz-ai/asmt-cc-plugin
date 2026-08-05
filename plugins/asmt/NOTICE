@@ -1,0 +1,13 @@
+ASMT Dev Workflow plugin
+Copyright (c) 2026 Effectz.AI
+
+This product includes software developed by third parties:
+
+superpowers — https://github.com/obra/superpowers
+  Copyright (c) Jesse Vincent. Licensed under the MIT License.
+
+OpenSpec — https://github.com/Fission-AI/OpenSpec
+  Licensed under the MIT License.
+
+Full MIT permission text applies to the portions derived from each project.
+Ported files are listed in ATTRIBUTION.md with their upstream path and commit.

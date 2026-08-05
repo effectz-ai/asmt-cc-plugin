@@ -4,3 +4,6 @@ node_modules/
 Thumbs.db
 .idea/
 .vscode/
+vendor/upstream/
+.asmt/receipts/
+.superpowers/

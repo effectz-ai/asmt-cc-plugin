@@ -1,0 +1,8 @@
+{
+  "name": "effectz",
+  "owner": { "name": "Effectz.AI Platform", "email": "dev@effectz.ai" },
+  "description": "Effectz.AI in-house workflow plugins for Claude Code.",
+  "plugins": [
+    { "name": "asmt", "source": "./plugins/asmt" }
+  ]
+}
