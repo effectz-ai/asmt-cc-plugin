@@ -18,14 +18,19 @@ RECEIPT="$RECEIPTS/$SHA.json"
 read_verify_command() {
   sed -n '/^verify:/,/^[^[:space:]#]/p' "$CONFIG" \
     | sed -n 's/^[[:space:]]\{1,\}command:[[:space:]]*//p' \
-    | head -n 1 \
     | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//"
 }
 
 cmd_run() {
-  local cmd start result seconds
+  local cmd start result seconds esc matches n_matches
   [ -f "$CONFIG" ] || die "no .asmt/config.yml in $ROOT. Run /asmt:start."
-  cmd="$(read_verify_command)"
+  matches="$(read_verify_command)" || die "could not read verify.command from $CONFIG"
+  n_matches="$(printf '%s\n' "$matches" | grep -c '.')"
+  case "$n_matches" in
+    0) cmd="" ;;
+    1) cmd="$matches" ;;
+    *) die "ambiguous verify.command in $CONFIG ($n_matches matches)" ;;
+  esac
   [ -n "$cmd" ] || die "verify.command missing from $CONFIG"
   [ -z "$(git -C "$ROOT" status --porcelain)" ] \
     || die "working tree dirty — commit before gating."
@@ -35,8 +40,12 @@ cmd_run() {
   if ( cd "$ROOT" && eval "$cmd" ); then result=pass; else result=fail; fi
   seconds="$(( $(date +%s) - start ))"
 
+  # escape backslashes before quotes, so the receipt is valid JSON even when
+  # verify.command contains literal backslashes (Windows paths, sed, regex).
+  esc="${cmd//\\/\\\\}"
+  esc="${esc//\"/\\\"}"
   printf '{"sha":"%s","result":"%s","command":"%s","at":"%s","seconds":%s}\n' \
-    "$SHA" "$result" "${cmd//\"/\\\"}" "$(date -Iseconds)" "$seconds" > "$RECEIPT"
+    "$SHA" "$result" "$esc" "$(date -Iseconds)" "$seconds" > "$RECEIPT"
 
   [ "$result" = pass ] || die "FAILED — receipt $RECEIPT"
   printf 'asmt-gate: pass (%s)\n' "$SHA"

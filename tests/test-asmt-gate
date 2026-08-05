@@ -50,5 +50,40 @@ is "check: rejects missing receipt" "$(run_in "$repo_bare" check)" "1"
 rm "$repo_bare/.asmt/config.yml"
 is "run: rejects missing config" "$(run_in "$repo_bare" run)" "1"
 
+# 8. receipt JSON escapes backslashes and quotes in the command
+repo_esc="$(new_repo true)"
+cat > "$repo_esc/.asmt/config.yml" <<'CFG'
+version: 1
+
+verify:
+  command: true "x\y" z
+  timeout_seconds: 900
+CFG
+( cd "$repo_esc" && git add -A && git commit -qm "escaping fixture" )
+is "run: passing command with backslash+quote exits 0" "$(run_in "$repo_esc" run)" "0"
+esc_receipt="$repo_esc/.asmt/receipts/$(head_sha "$repo_esc").json"
+grep -qF '"command":"true \"x\\y\" z"' "$esc_receipt" 2>/dev/null \
+  && ok "run: receipt escapes backslash and quote correctly" \
+  || bad "run: receipt command field not correctly escaped (got: $(cat "$esc_receipt" 2>/dev/null))"
+
+# 9. ambiguous verify.command (multiple `command:` lines) fails closed via
+# asmt-gate's own die(), not a raw pipeline abort under set -e/pipefail.
+repo_ambig="$(new_repo true)"
+cat > "$repo_ambig/.asmt/config.yml" <<'CFG'
+version: 1
+
+verify:
+  command: "true"
+  command: "false"
+  timeout_seconds: 900
+CFG
+( cd "$repo_ambig" && git add -A && git commit -qm "ambiguous fixture" )
+ambig_out="$( ( cd "$repo_ambig" && "$GATE" run ) 2>&1 )"
+ambig_rc=$?
+is "run: refuses ambiguous verify.command" "$ambig_rc" "1"
+printf '%s' "$ambig_out" | grep -q '^asmt-gate: ambiguous' \
+  && ok "run: ambiguous command dies with asmt-gate's own message, not a raw abort" \
+  || bad "run: ambiguous command did not produce asmt-gate's controlled die message, got: $ambig_out"
+
 [ "$fails" -eq 0 ] || printf '\n%s assertion(s) failed\n' "$fails"
 exit "$((fails > 0))"
