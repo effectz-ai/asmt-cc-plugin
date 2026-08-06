@@ -117,6 +117,57 @@ model would otherwise reach for. Every future human gate (the review agents'
 sign-offs, `/asmt:ship`, `/asmt:land`) should reuse this exact construction,
 not a paraphrase of it.
 
+### Under-triggering and over-reaching: what this run could and couldn't check
+
+Brief Step 4 asks for both. This run can answer one honestly and has to
+decline the other, and the difference matters enough to say plainly rather
+than leave it implicit.
+
+**Over-reaching: observed, twice, in one skill — not "none observed."**
+`spec/SKILL.md` step 4 ("Confirm the size class **with the user**...") and
+step 5 ("Interview before writing... Ask about the cases the card does not
+mention. Keep asking until you can state what is explicitly out of scope.")
+both read as instructions to get an answer from the user before continuing.
+I did neither: I picked `standard` myself and self-answered the interview
+questions from what `fixtures.sh` actually does, then folded both decisions
+into the one presentation at the step 7/8 sign-off, without waiting for a
+reply to either. That is exactly the task brief's definition of over-reach —
+proceeding past a step phrased as a human check without getting the human's
+answer. It happened to cause no harm because the stakeholder reviewed both
+decisions at the one gate that did hold, and didn't object to either — but
+that's the run's luck, not a property of the skill. ("Where wording was
+ambiguous," below, describes the same two steps from the softer angle of
+"the wording didn't clearly say whether to stop"; read from this angle, what
+happened there was over-reach, not just ambiguity, and it should be named as
+such.)
+
+**Under-triggering: unobservable by this run's methodology, not "none
+observed."** Every skill in this run was read because the task instructions
+named its file path directly — "read `plugins/asmt/skills/spec/SKILL.md`...
+follow it step by step, exactly as the model would if the skill had
+triggered" — never because a natural request competed against a loaded
+skill's `description` and won or lost. The plugin was never installed via
+`claude plugin marketplace add` / `claude plugin install` (see "Always-on
+token cost," below: `claude plugin details asmt` returns not-found), so its
+six descriptions never sat in one context alongside `caveman`, `ponytail`,
+`superpowers`, and `code-review`'s descriptions, competing for the same
+silent trigger decision a real session makes before any skill body loads.
+There is no honest way for this run to say whether a request that should
+have invoked, say, `/asmt:build` instead invoked nothing — recording "none
+observed" would be indistinguishable from not having checked, which is the
+finding the review caught. The right answer is that this run's methodology
+cannot produce that observation at all, for either direction (false
+negative or false positive).
+
+A future dogfood that wants under-triggering tested for real has to install
+the plugin the ordinary way (the brief's original Step 1 — `claude plugin
+marketplace add` + `claude plugin install`, not this task's file-path
+substitution) and drive it with plain requests — "let's spec out X," "run
+the checks," "is this ready for a PR" — in a session where ASMT's six
+descriptions are competing against every other installed plugin's skills for
+the same trigger decision, then check which requests fired the intended
+skill and which silently didn't.
+
 ### Where wording was ambiguous (not a hard stop, but read like one)
 
 - `spec/SKILL.md` step 4 said "Confirm the size class **with the user**" —

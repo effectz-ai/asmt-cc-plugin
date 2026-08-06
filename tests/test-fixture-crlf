@@ -43,6 +43,8 @@ rm -f "$err2"
 # output inspected is genuinely the whole suite's), it just skips this
 # block on its way back through this same file.
 if [ -z "${ASMT_SUITE_NESTED:-}" ]; then
+  # Spawns a full nested tests/run-all — this is where suite time roughly
+  # doubles; look here first, not just in tasks.md, when chasing it down.
   full_out="$(ASMT_SUITE_NESTED=1 "$HERE/run-all" 2>&1)"
   if printf '%s' "$full_out" | grep -q 'will be replaced by CRLF'; then
     bad "REQ-1.3: full tests/run-all output contains a CRLF warning"
