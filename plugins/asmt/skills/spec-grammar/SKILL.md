@@ -31,13 +31,16 @@ and checkable without any other scenario having run first.
 
 Scenario IDs are `REQ-<n>.<m>`. They are the contract with the test suite:
 `tdd-loop` requires every test name to contain the ID of the scenario it
-proves, bounded on both sides — the character immediately before and after
-the ID must be a non-digit (or the start/end of the name). Unbounded
-substring matching is not enough: `REQ-1.1` must not count as satisfied by
-a test named for `REQ-1.10`. As an ERE a checker can run with `grep -E` and
-no `jq`:
+proves, delimited on both sides by a non-alphanumeric character (or the
+start/end of the name) — a letter or digit touching either end of the ID
+disqualifies the match. Unbounded substring matching is not enough:
+`REQ-1.1` must not count as satisfied by a test named for `REQ-1.10`. A
+suffixed form like `REQ-1.2a` is not a valid ID and does not satisfy
+`REQ-1.2` — the grammar defines IDs as exactly `REQ-<n>.<m>`, nothing
+touching either end, so a test must not be named that way. As an ERE a
+checker can run with `grep -E` and no `jq`:
 
-    grep -E "(^|[^0-9])REQ-<n>\.<m>([^0-9]|$)"
+    grep -E "(^|[^0-9A-Za-z])REQ-<n>\.<m>([^0-9A-Za-z]|$)"
 
 That is what makes "the tests pass" mean "the spec is satisfied" rather than
 "the agent's code satisfies the agent's tests".

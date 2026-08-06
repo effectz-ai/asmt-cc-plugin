@@ -23,11 +23,18 @@ not `EFL-1234-implement-the-gate-receipt-mechanism`.
 
 Before drafting `spec.md`, read the capability's existing file(s) under
 `<paths.living>/` and continue numbering after the highest `REQ-<n>` already
-used there — a change never restarts a capability's numbering at `REQ-1`.
-If two changes touching the same capability are drafted concurrently,
-whichever lands second must renumber its new requirements around the first
-before it can fold: numbers are claimed at fold time, not at draft time, so
-a collision is caught at review, not discovered later in a test name.
+folded there — a change never restarts a capability's numbering at `REQ-1`.
+
+Sign-off is the one stability checkpoint (`SKILL.md`: "never renumbered once
+the spec is signed off") — not fold. Folding a signed-off change into
+`<paths.living>/` only copies its numbers in; it never assigns or changes
+one. So a number must be collision-free *before* its change signs off: check
+it against both the already-folded living spec and any other change on the
+same capability that has already signed off but not yet folded. If two
+changes touching the same capability are drafted concurrently and land on
+the same number, whichever author signs off second renumbers first — a
+change may not sign off holding a number another change has already signed
+off with. Once signed off, a number is permanent, folded or not.
 
 ## In `spec.md`, mark each requirement's disposition
 
@@ -41,12 +48,14 @@ what changed without opening the living spec alongside.
 ## When the change lands
 
 Fold `spec.md` into `<paths.living>/`, one file per capability rather than one
-per change. Requirement IDs *and* scenario IDs stay stable across the fold —
-the living spec is where `REQ-1` and `REQ-1.1` permanently mean what they
-meant when written, since `REQ-1.1` is the literal string `tdd-loop` looks
-for in test names. Editing a requirement's prose does not change its
-scenarios' IDs. Only a REMOVED requirement retires its scenario IDs, and a
-retired ID is never reused. Then archive the change directory.
+per change. Requirement IDs *and* scenario IDs were already frozen at
+sign-off (see above); fold copies them into the living spec unchanged, it
+does not assign or renumber anything. The living spec is where `REQ-1` and
+`REQ-1.1` permanently mean what they meant when signed off, since `REQ-1.1`
+is the literal string `tdd-loop` looks for in test names. Editing a
+requirement's prose does not change its scenarios' IDs. Only a REMOVED
+requirement retires its scenario IDs, and a retired ID is never reused. Then
+archive the change directory.
 
 ## Why this way
 
