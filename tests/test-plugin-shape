@@ -32,24 +32,57 @@ for s in $skills; do
     || bad "$rel: $lines lines — split into references/"
 done
 
-# Every ATTRIBUTION.md row must point at a file that exists.
+# Every ATTRIBUTION.md row must point at a file that exists, cite the SHA
+# pinned in vendor/UPSTREAM_SHAS for its upstream project, and (when a clone
+# of that project is present) name a path real at that SHA.
 attribution="$PLUGIN/ATTRIBUTION.md"
+shas="$HERE/../vendor/UPSTREAM_SHAS"
 if [ -f "$attribution" ]; then
   rows=0
-  while IFS='|' read -r _ ourfile _ _ _ _; do
+  while IFS='|' read -r _ ourfile upstream upstreampath sha _; do
     ourfile="$(printf '%s' "$ourfile" | sed 's/^ *//; s/ *$//')"
     case "$ourfile" in
       ''|'our file'|---*|:---*) continue ;;
     esac
     rows=$((rows + 1))
+    upstream="$(printf '%s' "$upstream" | sed 's/^ *//; s/ *$//')"
+    upstreampath="$(printf '%s' "$upstreampath" | sed 's/^ *//; s/ *$//')"
+    sha="$(printf '%s' "$sha" | sed 's/^ *//; s/ *$//')"
+    project="${upstream%% *}"
+
     [ -f "$PLUGIN/$ourfile" ] \
       && ok "attribution: $ourfile exists" \
       || bad "attribution: $ourfile listed but missing"
+
+    expected="$(awk -v p="$project" '$1==p{print $2}' "$shas" 2>/dev/null)"
+    if [ -z "$expected" ]; then
+      bad "attribution: $ourfile references unknown upstream project '$project' (not in vendor/UPSTREAM_SHAS)"
+    elif [ "$sha" = "$expected" ]; then
+      ok "attribution: $ourfile SHA matches vendor/UPSTREAM_SHAS for $project"
+    else
+      bad "attribution: $ourfile SHA $sha does not match vendor/UPSTREAM_SHAS for $project ($expected)"
+    fi
+
+    clone="$HERE/../vendor/upstream/$project"
+    if [ -d "$clone/.git" ]; then
+      git -C "$clone" cat-file -e "$sha:$upstreampath" 2>/dev/null \
+        && ok "attribution: $ourfile upstream path exists at $sha in the $project clone" \
+        || bad "attribution: $ourfile upstream path '$upstreampath' not found at $sha in the $project clone"
+    else
+      ok "attribution: $ourfile upstream path unverified — no $project clone at $clone, skipping (gitignored, not required)"
+    fi
   done < "$attribution"
-  ok "attribution: $rows row(s) checked"
+  [ "$rows" -gt 0 ] \
+    && ok "attribution: $rows row(s) checked" \
+    || bad "attribution: 0 row(s) checked — the check found no rows to validate"
 else
   bad "ATTRIBUTION.md missing"
 fi
+# ponytail: a ported file with zero ATTRIBUTION rows for it is not detected —
+# nothing marks a file as "this came from upstream" independent of the row
+# itself, so a missing row is invisible to this checker. Upgrade path: a
+# marker convention in ported files (e.g. a frontmatter/comment tag) this
+# check could grep for and cross-reference, if that gap ever bites.
 
 [ "$fails" -eq 0 ] || printf '\n%s assertion(s) failed\n' "$fails"
 exit "$((fails > 0))"
