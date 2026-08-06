@@ -32,5 +32,26 @@ else
 fi
 rm -f "$err2"
 
+
+# REQ-1.3: the real tests/run-all, run end to end, has zero CRLF warnings
+# in its combined output. This is the regression net — REQ-1.1/REQ-1.2
+# test the helper in isolation and would stay green even if some other
+# path started leaking the warning back in. This file is itself one of
+# run-all's test-* files, so a naive re-invocation from here would recurse
+# forever; ASMT_SUITE_NESTED marks "already inside the REQ-1.3 check" so
+# the nested run-all still executes every other test-* file for real (the
+# output inspected is genuinely the whole suite's), it just skips this
+# block on its way back through this same file.
+if [ -z "${ASMT_SUITE_NESTED:-}" ]; then
+  full_out="$(ASMT_SUITE_NESTED=1 "$HERE/run-all" 2>&1)"
+  if printf '%s' "$full_out" | grep -q 'will be replaced by CRLF'; then
+    bad "REQ-1.3: full tests/run-all output contains a CRLF warning"
+  else
+    ok "REQ-1.3: full tests/run-all output contains no CRLF warning"
+  fi
+else
+  ok "REQ-1.3: skipped in nested run (avoids recursing into run-all again)"
+fi
+
 [ "$fails" -eq 0 ] || printf '\n%s assertion(s) failed\n' "$fails"
 exit "$((fails > 0))"
