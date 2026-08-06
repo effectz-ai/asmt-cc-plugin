@@ -32,5 +32,24 @@ for s in $skills; do
     || bad "$rel: $lines lines — split into references/"
 done
 
+# Every ATTRIBUTION.md row must point at a file that exists.
+attribution="$PLUGIN/ATTRIBUTION.md"
+if [ -f "$attribution" ]; then
+  rows=0
+  while IFS='|' read -r _ ourfile _ _ _ _; do
+    ourfile="$(printf '%s' "$ourfile" | sed 's/^ *//; s/ *$//')"
+    case "$ourfile" in
+      ''|'our file'|---*|:---*) continue ;;
+    esac
+    rows=$((rows + 1))
+    [ -f "$PLUGIN/$ourfile" ] \
+      && ok "attribution: $ourfile exists" \
+      || bad "attribution: $ourfile listed but missing"
+  done < "$attribution"
+  ok "attribution: $rows row(s) checked"
+else
+  bad "ATTRIBUTION.md missing"
+fi
+
 [ "$fails" -eq 0 ] || printf '\n%s assertion(s) failed\n' "$fails"
 exit "$((fails > 0))"
