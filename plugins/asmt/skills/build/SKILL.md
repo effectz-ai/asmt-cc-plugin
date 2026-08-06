@@ -7,6 +7,9 @@ description: Implement an approved plan task by task, with tests. Use whenever t
 
 1. Read `.asmt/config.yml`. If `modes.topology` is `subagent`, stop — that
    topology is not implemented yet. Sequential is the only supported mode.
+   If `modes.loop` is `code-then-test`, stop for the same reason — `tdd` is
+   the only supported loop. Either way, abort the task; do not read further
+   in this skill and take it as license to continue some other way.
 2. Read the `tdd-loop` skill and the `house-rules` skill.
 3. Read `<paths.changes>/<change-id>/spec.md` and `tasks.md`. If `tasks.md`
    does not exist, stop and say so — there is no `/asmt:plan` yet, so the

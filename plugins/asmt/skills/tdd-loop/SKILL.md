@@ -5,9 +5,10 @@ description: The test-first loop every implementation task follows — write the
 
 # Test-Driven Development (TDD)
 
-If `.asmt/config.yml` sets `modes.loop: code-then-test`, this skill does not
-apply — stop here. That variant is not implemented yet; `tdd` is the only
-supported loop.
+If `.asmt/config.yml` sets `modes.loop: code-then-test`, abort the task —
+do not write any code, do not read further in this skill for another way to
+proceed. That variant is not implemented yet; `tdd` is the only supported
+loop, and there is no fallback to invent.
 
 ## Overview
 
@@ -292,7 +293,7 @@ Before marking work complete:
 - [ ] Watched each test fail before implementing
 - [ ] Each test failed for expected reason (feature missing, not typo)
 - [ ] Wrote minimal code to pass each test
-- [ ] All tests pass
+- [ ] `asmt-gate`'s own final line was quoted, not summarised from memory
 - [ ] Output pristine (no errors, warnings)
 - [ ] Tests use real code (mocks only if unavoidable)
 - [ ] Edge cases and errors covered
@@ -328,17 +329,30 @@ No exceptions without your human partner's permission.
 Every test must name the scenario it proves. Put the ID in the test name or
 its description string:
 
-    test_gate_refuses_dirty_tree_REQ_1_1
     it("REQ-1.2: writes a pass receipt on a clean tree", ...)
+    def test_gate_refuses_dirty_tree():
+        """REQ-1.1: refuses to run against a dirty working tree."""
 
-A scenario ID is exactly `REQ-<n>.<m>` — nothing touching either end. A
+When the ID cannot appear literally in a test *name* — Python, Go, Rust, and
+other languages where `-` and `.` are illegal in an identifier — put it in
+the docstring or description string instead. Never transliterate it:
+`REQ_1_1` is not `REQ-1.1`, and nothing below will match it.
+
+Scenario IDs are `REQ-<n>.<m>`. They are the contract with the test suite:
+`tdd-loop` requires every test name to contain the ID of the scenario it
+proves, delimited on both sides by a non-alphanumeric character (or the
+start/end of the name) — a letter or digit touching either end of the ID
+disqualifies the match. Unbounded substring matching is not enough:
+`REQ-1.1` must not count as satisfied by a test named for `REQ-1.10`. A
 suffixed form like `REQ-1.2a` is not a valid ID and does not satisfy
-`REQ-1.2`. Match it delimited on both sides by a non-alphanumeric character
-(or the start/end of the name); unbounded substring matching is not enough,
-so `REQ-1.1` must not count as satisfied by a test named for `REQ-1.10`. As
-an ERE a checker can run with `grep -E` and no `jq`:
+`REQ-1.2` — the grammar defines IDs as exactly `REQ-<n>.<m>`, nothing
+touching either end, so a test must not be named that way. As an ERE a
+checker can run with `grep -E` and no `jq`:
 
     grep -E "(^|[^0-9A-Za-z])REQ-<n>\.<m>([^0-9A-Za-z]|$)"
+
+That is what makes "the tests pass" mean "the spec is satisfied" rather than
+"the agent's code satisfies the agent's tests".
 
 Two consequences, and both are the point:
 
