@@ -12,17 +12,22 @@ ok()  { printf 'ok   - %s\n' "$1"; }
 bad() { printf 'FAIL - %s\n' "$1"; fails=$((fails + 1)); }
 is()  { [ "$2" = "$3" ] && ok "$1" || bad "$1 (expected $3, got $2)"; }
 
-# guard_in <repo> <command-string> -> "allow(<exit>)" or "deny(<exit>)"
+# guard_in <repo> <command-string> [tool-name] -> "allow(<exit>)" or "deny(<exit>)"
 #
 # Blocking convention: structured JSON on stdout with
 # permissionDecision:"deny", exit 0. Confirmed empirically against a live
 # Claude Code session (build 2.1.223) — the documented exit-2 convention did
 # NOT block the tool call in that build, only this JSON form did. See
 # plugins/asmt/CHANGELOG.md.
+#
+# tool-name defaults to Bash; pass PowerShell to shape the payload like that
+# tool's hook input instead (hooks.json matches both — confirmed via live
+# session transcripts that the PowerShell tool's tool_input also uses a
+# "command" field, same as Bash).
 guard_in() {
-  local repo="$1" cmd="$2" out rc
+  local repo="$1" cmd="$2" tool="${3:-Bash}" out rc
   out="$( cd "$repo" \
-    && printf '{"tool_name":"Bash","tool_input":{"command":"%s"}}' "$cmd" \
+    && printf '{"tool_name":"%s","tool_input":{"command":"%s"}}' "$tool" "$cmd" \
        | CLAUDE_PLUGIN_ROOT="$PLUGIN" "$GUARD" 2>/dev/null )"
   rc=$?
   case "$out" in
@@ -46,6 +51,11 @@ is "blocks gh pr create with double space between tokens" \
    "$(guard_in "$repo" 'gh  pr  create --fill')" "deny(0)"
 is "blocks gh pr create with a tab between tokens" \
    "$(guard_in "$repo" "$(printf 'gh\tpr\tcreate --fill')")" "deny(0)"
+
+# 2b. the guard is registered on both Bash and PowerShell (hooks.json
+# matcher: "Bash|PowerShell") — it must deny a PowerShell-shaped payload too.
+is "blocks gh pr create without receipt via the PowerShell tool" \
+   "$(guard_in "$repo" 'gh pr create --fill' PowerShell)" "deny(0)"
 
 # 3. once a receipt exists for HEAD, it is allowed
 ( cd "$repo" && CLAUDE_PLUGIN_ROOT="$PLUGIN" "$PLUGIN/bin/asmt-gate" run >/dev/null 2>&1 )
