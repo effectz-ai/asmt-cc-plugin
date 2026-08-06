@@ -1,9 +1,6 @@
-# Spec: quiet-fixture-crlf
+# Capability: test-fixtures
 
-Capability: test-fixtures. No living spec exists yet for this capability, so
-numbering starts at `REQ-1`.
-
-## ADDED REQ-1: Fixture repos created by the test suite do not emit git
+## REQ-1: Fixture repos created by the test suite do not emit git
 line-ending warnings
 
 Requirement: On a host with `core.autocrlf=true` set globally, no fixture
@@ -30,3 +27,7 @@ fixtures), then that commit also prints no line-ending warning.
 Given a host with `core.autocrlf=true` set globally, when `tests/run-all`
 executes the full suite, then the suite's combined stdout+stderr contains
 zero occurrences of the string `will be replaced by CRLF`.
+
+Folded from `specs/changes/archive/quiet-fixture-crlf/` (signed off: sano,
+2026-08-06). Requirement and scenario IDs are frozen as of that sign-off —
+see `spec-grammar/references/living.md`.

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Regression tests for the CRLF-warning noise from tests/fixtures.sh's
-# new_repo(). See specs/changes/quiet-fixture-crlf/spec.md.
+# new_repo(). See specs/current/test-fixtures.md (folded from
+# specs/changes/archive/quiet-fixture-crlf/).
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
