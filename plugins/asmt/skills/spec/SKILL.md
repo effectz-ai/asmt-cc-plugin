@@ -11,9 +11,11 @@ description: Turn a card into a reviewed specification before any code is writte
    `references/` matches `modes.artifacts`. If `modes.artifacts` is
    `ephemeral`, stop — that variant is not implemented yet.
 3. Read the `house-rules` skill.
-4. Confirm the size class with the user (`chore`, `standard`, `risky`;
-   `default_size_class` is the default). If `chore`, write a lite spec — the
-   requirements only, no proposal — and stop.
+4. State the size class you are using (`chore`, `standard`, `risky`;
+   `default_size_class` is the default) and why, in one line. This is not a
+   second stop — it is confirmed alongside the sign-off in step 8, not before
+   it. If `chore`, write a lite spec — the requirements only, no proposal —
+   and stop.
 5. Interview before writing. Do not infer requirements from the card title.
    Ask about the cases the card does not mention. Keep asking until you can
    state what is explicitly out of scope.
