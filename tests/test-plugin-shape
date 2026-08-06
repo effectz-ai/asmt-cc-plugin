@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Structural checks on the plugin: frontmatter present, bodies within budget.
+set -uo pipefail
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+PLUGIN="$HERE/../plugins/asmt"
+
+fails=0
+ok()  { printf 'ok   - %s\n' "$1"; }
+bad() { printf 'FAIL - %s\n' "$1"; fails=$((fails + 1)); }
+
+skills=$(find "$PLUGIN/skills" -name SKILL.md 2>/dev/null | sort)
+[ -n "$skills" ] || bad "no SKILL.md files found under $PLUGIN/skills"
+
+for s in $skills; do
+  rel="${s#"$PLUGIN"/}"
+
+  head -n 1 "$s" | grep -qx -- '---' \
+    && ok "$rel: opens with frontmatter" || bad "$rel: missing opening ---"
+
+  grep -qE '^name: [a-z0-9-]+$' "$s" \
+    && ok "$rel: has a kebab-case name" || bad "$rel: missing or malformed name:"
+
+  desc=$(sed -n 's/^description: //p' "$s" | head -n 1)
+  [ "${#desc}" -ge 60 ] \
+    && ok "$rel: description is substantial" \
+    || bad "$rel: description too short (${#desc} chars) — it is the trigger mechanism"
+
+  lines=$(wc -l < "$s")
+  [ "$lines" -le 500 ] \
+    && ok "$rel: body within budget ($lines lines)" \
+    || bad "$rel: $lines lines — split into references/"
+done
+
+[ "$fails" -eq 0 ] || printf '\n%s assertion(s) failed\n' "$fails"
+exit "$((fails > 0))"
