@@ -1,9 +1,13 @@
 ---
-name: test-driven-development
-description: Use when implementing any feature or bugfix, before writing implementation code
+name: tdd-loop
+description: The test-first loop every implementation task follows — write the failing test, watch it fail, write minimal code to pass, watch it pass, commit. Use whenever the user wants to implement, make this work, add the feature, or fix the bug. Read this before writing any implementation code, not after starting.
 ---
 
 # Test-Driven Development (TDD)
+
+If `.asmt/config.yml` sets `modes.loop: code-then-test`, this skill does not
+apply — stop here. That variant is not implemented yet; `tdd` is the only
+supported loop.
 
 ## Overview
 
@@ -318,3 +322,31 @@ Otherwise → not TDD
 ```
 
 No exceptions without your human partner's permission.
+
+## Test names carry scenario IDs
+
+Every test must name the scenario it proves. Put the ID in the test name or
+its description string:
+
+    test_gate_refuses_dirty_tree_REQ_1_1
+    it("REQ-1.2: writes a pass receipt on a clean tree", ...)
+
+A scenario ID is exactly `REQ-<n>.<m>` — nothing touching either end. A
+suffixed form like `REQ-1.2a` is not a valid ID and does not satisfy
+`REQ-1.2`. Match it delimited on both sides by a non-alphanumeric character
+(or the start/end of the name); unbounded substring matching is not enough,
+so `REQ-1.1` must not count as satisfied by a test named for `REQ-1.10`. As
+an ERE a checker can run with `grep -E` and no `jq`:
+
+    grep -E "(^|[^0-9A-Za-z])REQ-<n>\.<m>([^0-9A-Za-z]|$)"
+
+Two consequences, and both are the point:
+
+- A test with no scenario ID is testing something nobody asked for. Either
+  the spec is missing a scenario — go add it — or the test is scope creep.
+- A scenario with no test is unimplemented, and `grep` can prove it. That is
+  what makes the verification gate mean "the spec is satisfied" instead of
+  "the code passes its own tests".
+
+If the spec is wrong, change the spec. Do not write an unlabelled test
+because the ID would be inconvenient.
