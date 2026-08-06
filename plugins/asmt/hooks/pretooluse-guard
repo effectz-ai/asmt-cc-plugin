@@ -11,13 +11,22 @@ set -uo pipefail
 
 payload="$(cat)"
 
-# ponytail: substring match on the whole payload rather than parsing JSON —
-# jq is not a dependency we want. A false positive only costs an explained
-# block. Parse tool_input.command properly if that ever bites.
-case "$payload" in
-  *"gh pr create"*) ;;
-  *) exit 0 ;;
-esac
+# ponytail: regex match on the whole payload rather than parsing JSON — jq
+# is not a dependency we want. [[:space:]]+ absorbs whitespace variance
+# (double space, tab, newline) between the three tokens, so "gh  pr\tcreate"
+# still matches; a leading path (/usr/bin/gh pr create) or `command gh pr
+# create` also matches, because the check is an unanchored substring search.
+#
+# Ceiling this can't close, by construction: anything where "gh pr create"
+# isn't a contiguous run in the raw command text — a shell alias/function
+# that expands to it, or tokens rebuilt from variables/quote-splitting
+# (`a=gh; b=pr; c=create; $a $b $c`, `g""h pr create`). A false positive
+# here only costs an explained block; a false negative is the real failure
+# mode for a gate — if that gap gets exploited, stop pattern-matching text
+# and parse tool_input.command as JSON with a real parser, then inspect argv.
+if [[ ! "$payload" =~ gh[[:space:]]+pr[[:space:]]+create ]]; then
+  exit 0
+fi
 
 root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
 [ -f "$root/.asmt/config.yml" ] || exit 0   # not an ASMT repo; not our business

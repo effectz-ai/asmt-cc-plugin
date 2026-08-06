@@ -40,6 +40,13 @@ is "allows unrelated command" "$(guard_in "$repo" 'git status')" "allow(0)"
 is "blocks gh pr create without receipt" \
    "$(guard_in "$repo" 'gh pr create --fill')" "deny(0)"
 
+# 2a. whitespace variance between tokens must not bypass the match —
+# double space and a tab both still deny.
+is "blocks gh pr create with double space between tokens" \
+   "$(guard_in "$repo" 'gh  pr  create --fill')" "deny(0)"
+is "blocks gh pr create with a tab between tokens" \
+   "$(guard_in "$repo" "$(printf 'gh\tpr\tcreate --fill')")" "deny(0)"
+
 # 3. once a receipt exists for HEAD, it is allowed
 ( cd "$repo" && CLAUDE_PLUGIN_ROOT="$PLUGIN" "$PLUGIN/bin/asmt-gate" run >/dev/null 2>&1 )
 is "allows gh pr create with fresh receipt" \
