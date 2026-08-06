@@ -24,7 +24,31 @@ if exist "C:\Program Files (x86)\Git\bin\bash.exe" (
     "C:\Program Files (x86)\Git\bin\bash.exe" "%HOOK_DIR%%~1" %2 %3 %4 %5 %6 %7 %8 %9
     exit /b %ERRORLEVEL%
 )
+REM Scoop's Git package (`scoop install git`) — a common per-user install
+REM that never touches Program Files. "current" is the version-independent
+REM junction Scoop maintains, so this survives Git version bumps.
+if exist "%USERPROFILE%\scoop\apps\git\current\bin\bash.exe" (
+    "%USERPROFILE%\scoop\apps\git\current\bin\bash.exe" "%HOOK_DIR%%~1" %2 %3 %4 %5 %6 %7 %8 %9
+    exit /b %ERRORLEVEL%
+)
+REM Cygwin's own bash, independent of any Git-for-Windows install.
+if exist "C:\cygwin64\bin\bash.exe" (
+    "C:\cygwin64\bin\bash.exe" "%HOOK_DIR%%~1" %2 %3 %4 %5 %6 %7 %8 %9
+    exit /b %ERRORLEVEL%
+)
+if exist "C:\cygwin\bin\bash.exe" (
+    "C:\cygwin\bin\bash.exe" "%HOOK_DIR%%~1" %2 %3 %4 %5 %6 %7 %8 %9
+    exit /b %ERRORLEVEL%
+)
+REM winget's default Git package installs to the same Program Files path
+REM already checked above, so it needs no separate branch here.
 
+REM Last resort: PATH search. On a machine with WSL installed but no real
+REM bash, this finds C:\Windows\System32\bash.exe (the WSL launcher) ahead
+REM of anything else — it "succeeds" per ERRORLEVEL but cannot open a
+REM Windows path (it parses backslashes as escapes) and exits 127. That
+REM still lands on the "no bash found" outcome below, just one step later
+REM and by the fail-open path (see CHANGELOG.md).
 where bash >nul 2>nul
 if %ERRORLEVEL% equ 0 (
     bash "%HOOK_DIR%%~1" %2 %3 %4 %5 %6 %7 %8 %9

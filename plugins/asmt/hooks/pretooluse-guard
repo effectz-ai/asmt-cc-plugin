@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# PreToolUse guard: refuse `gh pr create` unless HEAD has a passing gate
-# receipt.
+# PreToolUse guard: refuse `gh pr create` (or the equivalent `gh api .../pulls`
+# REST call) unless HEAD has a passing gate receipt.
 #
 # Blocking convention: structured JSON on stdout with
 # permissionDecision:"deny", exit 0 — confirmed empirically against this
@@ -16,15 +16,26 @@ payload="$(cat)"
 # (double space, tab, newline) between the three tokens, so "gh  pr\tcreate"
 # still matches; a leading path (/usr/bin/gh pr create) or `command gh pr
 # create` also matches, because the check is an unanchored substring search.
+# Second branch covers `gh api repos/OWNER/REPO/pulls ...` — the REST
+# endpoint `gh pr create` itself calls — regardless of flag order
+# (`-X POST`, `--method POST`, or the POST-by-default that field flags
+# imply); matching on the `/pulls` path segment alone, with no method check,
+# means a plain `gh api .../pulls` read is blocked too, but a false positive
+# here only costs an explained block, same tradeoff as below.
 #
-# Ceiling this can't close, by construction: anything where "gh pr create"
-# isn't a contiguous run in the raw command text — a shell alias/function
-# that expands to it, or tokens rebuilt from variables/quote-splitting
-# (`a=gh; b=pr; c=create; $a $b $c`, `g""h pr create`). A false positive
-# here only costs an explained block; a false negative is the real failure
-# mode for a gate — if that gap gets exploited, stop pattern-matching text
-# and parse tool_input.command as JSON with a real parser, then inspect argv.
-if [[ ! "$payload" =~ gh[[:space:]]+pr[[:space:]]+create ]]; then
+# Ceiling this can't close, by construction: anything where neither
+# contiguous run ("gh pr create" / "gh api .../pulls") appears in the raw
+# command text — a shell alias/function that expands to it, tokens rebuilt
+# from variables/quote-splitting (`a=gh; b=pr; c=create; $a $b $c`,
+# `g""h pr create`), a GraphQL `createPullRequest` mutation via `gh api
+# graphql`, a browser, or `git push` to a branch that already has an open
+# PR (GitHub opens no new PR, so there is nothing here to catch). A false
+# positive here only costs an explained block; a false negative is the real
+# failure mode for a gate — if one of these gaps gets exploited, stop
+# pattern-matching text and parse tool_input.command as JSON with a real
+# parser, then inspect argv.
+if [[ ! "$payload" =~ gh[[:space:]]+pr[[:space:]]+create ]] \
+   && [[ ! "$payload" =~ gh[[:space:]]+api[[:space:]].*/pulls([^0-9A-Za-z]|$) ]]; then
   exit 0
 fi
 

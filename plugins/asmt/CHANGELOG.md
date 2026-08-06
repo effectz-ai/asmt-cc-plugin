@@ -24,3 +24,29 @@
   the session's stream-json output, for both tools). If you're porting this
   hook to another Claude Code build, re-verify this before assuming either
   convention.
+- **Correction to the paragraph above:** the `Bash|PowerShell` matcher
+  widening covers which *tool call* triggers the hook. It says nothing about
+  whether `run-hook.cmd`'s own cmd.exe-detection branch ever runs, and it
+  does not cover the population it was assumed to. `hooks.json` sets
+  `"shell": "bash"` on this hook's command, and per Claude Code's hooks
+  documentation that field means Claude Code invokes the command directly
+  through bash (Git Bash on Windows; it falls back to the PowerShell
+  *interpreter*, not to cmd.exe, when Git Bash isn't found) — so
+  `run-hook.cmd`'s `@echo off` / cmd.exe polyglot half is very likely dead
+  code under Claude Code's own normal hook execution for this config. It
+  remains only as a defensive fallback for other invocation paths (a manual
+  or test invocation via `cmd.exe` directly, or a build that does not honour
+  `"shell"`). Measured on a real machine (Scoop-installed Git, no install at
+  either of the two hardcoded `Program Files` paths, Git Bash discoverable
+  only under `%USERPROFILE%\scoop\apps\git\current\`): if that cmd.exe
+  branch *is* reached, its old fallback — bare `where bash` — resolves to
+  `C:\Windows\System32\bash.exe`, the WSL launcher stub, before it ever
+  finds a real bash. That stub cannot open a Windows path (it treats
+  backslashes as escapes) and exits 127; a non-2, non-JSON exit does not
+  block per the convention above, so the guard fails **open**, silently.
+  `run-hook.cmd` now probes the Scoop and Cygwin install locations before
+  falling back to `where bash`, closing that specific gap for the cmd.exe
+  branch — but the honest summary is: **a machine with no usable bash has no
+  guard at all**, on either invocation path. Neither this fix nor the
+  matcher widening changes that; nothing in this plugin can block a tool
+  call that never reaches a shell capable of running the guard script.

@@ -57,10 +57,23 @@ is "blocks gh pr create with a tab between tokens" \
 is "blocks gh pr create without receipt via the PowerShell tool" \
    "$(guard_in "$repo" 'gh pr create --fill' PowerShell)" "deny(0)"
 
+# 2c. `gh api .../pulls` reaches the same REST endpoint `gh pr create` calls
+# under the hood — the guard must catch it too, in any flag order, and must
+# not be fooled by a deeper path segment like /pulls/123/comments turning
+# into a false negative for the bare-pulls creation shape.
+is "blocks gh api .../pulls -X POST (creates a PR)" \
+   "$(guard_in "$repo" 'gh api repos/OWNER/REPO/pulls -X POST -f title=x')" "deny(0)"
+is "blocks gh api with --method before the path" \
+   "$(guard_in "$repo" 'gh api --method POST repos/OWNER/REPO/pulls -f title=x')" "deny(0)"
+is "blocks gh api .../pulls with a leading slash" \
+   "$(guard_in "$repo" 'gh api /repos/OWNER/REPO/pulls -f title=x')" "deny(0)"
+
 # 3. once a receipt exists for HEAD, it is allowed
 ( cd "$repo" && CLAUDE_PLUGIN_ROOT="$PLUGIN" "$PLUGIN/bin/asmt-gate" run >/dev/null 2>&1 )
 is "allows gh pr create with fresh receipt" \
    "$(guard_in "$repo" 'gh pr create --fill')" "allow(0)"
+is "allows gh api .../pulls with fresh receipt" \
+   "$(guard_in "$repo" 'gh api repos/OWNER/REPO/pulls -X POST -f title=x')" "allow(0)"
 
 # 4. repos that do not use ASMT are none of the guard's business
 plain="$(mktemp -d)"
