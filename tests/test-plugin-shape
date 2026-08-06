@@ -6,8 +6,9 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN="$HERE/../plugins/asmt"
 
 fails=0
-ok()  { printf 'ok   - %s\n' "$1"; }
-bad() { printf 'FAIL - %s\n' "$1"; fails=$((fails + 1)); }
+ok()   { printf 'ok   - %s\n' "$1"; }
+bad()  { printf 'FAIL - %s\n' "$1"; fails=$((fails + 1)); }
+skip() { printf 'skip - %s\n' "$1"; }
 
 skills=$(find "$PLUGIN/skills" -name SKILL.md 2>/dev/null | sort)
 [ -n "$skills" ] || bad "no SKILL.md files found under $PLUGIN/skills"
@@ -69,7 +70,7 @@ if [ -f "$attribution" ]; then
         && ok "attribution: $ourfile upstream path exists at $sha in the $project clone" \
         || bad "attribution: $ourfile upstream path '$upstreampath' not found at $sha in the $project clone"
     else
-      ok "attribution: $ourfile upstream path unverified — no $project clone at $clone, skipping (gitignored, not required)"
+      skip "attribution: $ourfile upstream path unverified — no $project clone at $clone (gitignored, not required)"
     fi
   done < "$attribution"
   [ "$rows" -gt 0 ] \

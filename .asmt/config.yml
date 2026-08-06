@@ -20,12 +20,3 @@ verify:
 paths:
   changes: "specs/changes"
   living:  "specs/current"
-
-models:
-  spec: opus
-  plan: opus
-  build: sonnet
-  self_review: sonnet
-  final_review: opus
-
-card_tool: jira            # jira | linear | notion

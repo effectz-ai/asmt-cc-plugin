@@ -346,3 +346,21 @@ topology and review-gate work (Steps 7–8) depend on a stable task
 representation to hand to a subagent in the first place; building that
 before `/asmt:plan` exists means building it against an invented,
 unvalidated format that `/asmt:plan` will likely have to redefine anyway.
+
+## The repo does not yet satisfy its own rule
+
+`build/SKILL.md` (step 8, formerly step 4) requires every test name to carry
+the `REQ-<n>.<m>` ID of the scenario it proves. Only `tests/test-fixture-crlf`
+— the suite this dogfood run added — actually does. `tests/test-asmt-gate`,
+`tests/test-plugin-shape`, and `tests/test-pretooluse-guard` all predate
+`spec-grammar` and `tdd-loop`'s ID requirement; they were written before
+either skill existed, against no spec at all, so there is no `REQ-<n>.<m>`
+for their test names to carry. This is recorded here deliberately rather
+than left to be discovered as a surprise: it is not something this run
+fixed, and it should not be "fixed" by retro-specifying three pre-existing
+test files just to make their names comply — a spec written after the fact,
+to match tests that already exist, inverts spec-grammar's whole premise
+(scenarios come first, tests prove them, not the reverse). The honest state
+is that the rule applies going forward, from `quiet-fixture-crlf` on, and
+the three older suites are grandfathered until whatever future change
+actually touches that code gives it a real spec on its own terms.

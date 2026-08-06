@@ -6,8 +6,12 @@ This product includes software developed by third parties:
 superpowers — https://github.com/obra/superpowers
   Copyright (c) Jesse Vincent. Licensed under the MIT License.
 
-OpenSpec — https://github.com/Fission-AI/OpenSpec
-  Licensed under the MIT License.
-
-Full MIT permission text applies to the portions derived from each project.
+Full MIT permission text applies to the portions derived from superpowers.
 Ported files are listed in ATTRIBUTION.md with their upstream path and commit.
+
+The change/spec/fold/archive workflow described in
+plugins/asmt/skills/spec-grammar/references/living.md is conceptually
+modeled on the approach used by OpenSpec
+(https://github.com/Fission-AI/OpenSpec, MIT License). No OpenSpec code is
+included in this plugin; vendor/UPSTREAM_SHAS records the commit that was
+read for reference.
