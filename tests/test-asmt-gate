@@ -102,5 +102,39 @@ printf '%s' "$nocmd_out" | grep -q 'verify.command missing from' \
   && ok "run: missing-command config dies with the intended message" \
   || bad "run: missing-command config did not produce the intended die message, got: $nocmd_out"
 
+# 11. verify.timeout_seconds is honoured: a command that outlives the
+# configured timeout is killed, the run is treated as a failure, and the
+# receipt records it — proving the key isn't decoration.
+repo_slow="$(new_repo true)"
+cat > "$repo_slow/.asmt/config.yml" <<'CFG'
+version: 1
+
+verify:
+  command: "sleep 5"
+  timeout_seconds: 1
+CFG
+( cd "$repo_slow" && git add -A && git commit -qm "slow verify fixture" )
+slow_start=$(date +%s)
+is "run: kills a command that exceeds timeout_seconds" "$(run_in "$repo_slow" run)" "1"
+slow_elapsed=$(( $(date +%s) - slow_start ))
+[ "$slow_elapsed" -lt 5 ] \
+  && ok "run: timeout actually killed the command (took ${slow_elapsed}s, not ~5s)" \
+  || bad "run: command ran to completion instead of being killed (took ${slow_elapsed}s)"
+grep -q '"result":"fail"' "$repo_slow/.asmt/receipts/$(head_sha "$repo_slow").json" 2>/dev/null \
+  && ok "run: timed-out command's receipt records fail" \
+  || bad "run: timed-out command's receipt missing fail result"
+
+# 12. a config with no timeout_seconds key still runs unbounded, unchanged
+# from before the key was wired up.
+repo_notimeout="$(new_repo true)"
+cat > "$repo_notimeout/.asmt/config.yml" <<'CFG'
+version: 1
+
+verify:
+  command: "true"
+CFG
+( cd "$repo_notimeout" && git add -A && git commit -qm "no-timeout fixture" )
+is "run: absent timeout_seconds does not break the run" "$(run_in "$repo_notimeout" run)" "0"
+
 [ "$fails" -eq 0 ] || printf '\n%s assertion(s) failed\n' "$fails"
 exit "$((fails > 0))"

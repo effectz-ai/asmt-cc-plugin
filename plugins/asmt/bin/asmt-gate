@@ -21,9 +21,18 @@ read_verify_command() {
     | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//"
 }
 
+# Same scalar-read trick for verify.timeout_seconds. Empty/missing/non-numeric
+# all collapse to "0", and `timeout 0 ...` (GNU coreutils) means "no timeout"
+# — so a config that omits the key runs exactly as before this was wired up.
+read_verify_timeout() {
+  sed -n '/^verify:/,/^[^[:space:]#]/p' "$CONFIG" \
+    | sed -n 's/^[[:space:]]\{1,\}timeout_seconds:[[:space:]]*//p' \
+    | head -n 1
+}
+
 cmd_run() {
-  local cmd start result seconds esc matches n_matches
-  [ -f "$CONFIG" ] || die "no .asmt/config.yml in $ROOT. Run /asmt:start."
+  local cmd start result seconds esc matches n_matches timeout_secs
+  [ -f "$CONFIG" ] || die "no .asmt/config.yml in $ROOT. Create one with a verify.command (see README)."
   matches="$(read_verify_command)" || die "could not read verify.command from $CONFIG"
   n_matches="$(printf '%s\n' "$matches" | grep -c '.')" || true
   case "$n_matches" in
@@ -35,9 +44,12 @@ cmd_run() {
   [ -z "$(git -C "$ROOT" status --porcelain)" ] \
     || die "working tree dirty — commit before gating."
 
+  timeout_secs="$(read_verify_timeout)"
+  case "$timeout_secs" in *[!0-9]*|'') timeout_secs=0 ;; esac
+
   mkdir -p "$RECEIPTS"
   start="$(date +%s)"
-  if ( cd "$ROOT" && eval "$cmd" ); then result=pass; else result=fail; fi
+  if ( cd "$ROOT" && timeout "$timeout_secs" bash -c "$cmd" ); then result=pass; else result=fail; fi
   seconds="$(( $(date +%s) - start ))"
 
   # escape backslashes before quotes, so the receipt is valid JSON even when
