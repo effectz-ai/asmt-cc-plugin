@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+PLUGIN="$HERE/../plugins/asmt"
+GUARD="$PLUGIN/hooks/pretooluse-guard"
+# shellcheck source=fixtures.sh
+. "$HERE/fixtures.sh"
+
+fails=0
+ok()  { printf 'ok   - %s\n' "$1"; }
+bad() { printf 'FAIL - %s\n' "$1"; fails=$((fails + 1)); }
+is()  { [ "$2" = "$3" ] && ok "$1" || bad "$1 (expected $3, got $2)"; }
+
+# guard_in <repo> <command-string> -> "allow(<exit>)" or "deny(<exit>)"
+#
+# Blocking convention: structured JSON on stdout with
+# permissionDecision:"deny", exit 0. Confirmed empirically against a live
+# Claude Code session (build 2.1.223) — the documented exit-2 convention did
+# NOT block the tool call in that build, only this JSON form did. See
+# plugins/asmt/CHANGELOG.md.
+guard_in() {
+  local repo="$1" cmd="$2" out rc
+  out="$( cd "$repo" \
+    && printf '{"tool_name":"Bash","tool_input":{"command":"%s"}}' "$cmd" \
+       | CLAUDE_PLUGIN_ROOT="$PLUGIN" "$GUARD" 2>/dev/null )"
+  rc=$?
+  case "$out" in
+    *'"permissionDecision":"deny"'*) printf 'deny(%s)\n' "$rc" ;;
+    *) printf 'allow(%s)\n' "$rc" ;;
+  esac
+}
+
+repo="$(new_repo true)"
+
+# 1. unrelated commands pass straight through
+is "allows unrelated command" "$(guard_in "$repo" 'git status')" "allow(0)"
+
+# 2. gh pr create with no receipt is denied via structured JSON, exit 0
+is "blocks gh pr create without receipt" \
+   "$(guard_in "$repo" 'gh pr create --fill')" "deny(0)"
+
+# 3. once a receipt exists for HEAD, it is allowed
+( cd "$repo" && CLAUDE_PLUGIN_ROOT="$PLUGIN" "$PLUGIN/bin/asmt-gate" run >/dev/null 2>&1 )
+is "allows gh pr create with fresh receipt" \
+   "$(guard_in "$repo" 'gh pr create --fill')" "allow(0)"
+
+# 4. repos that do not use ASMT are none of the guard's business
+plain="$(mktemp -d)"
+git -C "$plain" init -q -b main
+git -C "$plain" config user.email "test@example.com"
+git -C "$plain" config user.name "test"
+( cd "$plain" && git commit -q --allow-empty -m init )
+is "ignores repos without .asmt/config.yml" \
+   "$(guard_in "$plain" 'gh pr create --fill')" "allow(0)"
+
+[ "$fails" -eq 0 ] || printf '\n%s assertion(s) failed\n' "$fails"
+exit "$((fails > 0))"

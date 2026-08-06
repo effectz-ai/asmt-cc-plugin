@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# PreToolUse guard: refuse `gh pr create` unless HEAD has a passing gate
+# receipt.
+#
+# Blocking convention: structured JSON on stdout with
+# permissionDecision:"deny", exit 0 — confirmed empirically against this
+# Claude Code build (2.1.223). The documented exit-2 convention was tested
+# first and does NOT block here: the tool call proceeds regardless of exit
+# code, only the JSON form is honoured. See CHANGELOG.md.
+set -uo pipefail
+
+payload="$(cat)"
+
+# ponytail: substring match on the whole payload rather than parsing JSON —
+# jq is not a dependency we want. A false positive only costs an explained
+# block. Parse tool_input.command properly if that ever bites.
+case "$payload" in
+  *"gh pr create"*) ;;
+  *) exit 0 ;;
+esac
+
+root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+[ -f "$root/.asmt/config.yml" ] || exit 0   # not an ASMT repo; not our business
+
+plugin_root="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
+
+if ! "$plugin_root/bin/asmt-gate" check >/dev/null 2>&1; then
+  printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"asmt: blocked — HEAD has no passing verification receipt. Run /asmt:verify (or asmt-gate run) and do not commit anything afterwards; a new commit invalidates the receipt. Then retry the PR."}}'
+  exit 0
+fi
+
+exit 0
