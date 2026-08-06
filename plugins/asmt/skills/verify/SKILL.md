@@ -5,8 +5,9 @@ description: Run the repository's verification gate and produce a receipt for th
 
 # Verify
 
-1. Read `.asmt/config.yml`. If it is missing, stop and tell the user to run
-   `/asmt:start`. Do not invent a verification command.
+1. Read `.asmt/config.yml`. If it is missing, stop and tell the user: no
+   `.asmt/config.yml` in this repo. Create one with a `verify.command` (see
+   README). Do not invent a verification command.
 2. Run `git status --porcelain`. If it is non-empty, stop and ask the user to
    commit. The gate refuses a dirty tree by design: the receipt is a fact
    about a commit, not about a workspace.

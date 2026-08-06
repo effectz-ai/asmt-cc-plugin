@@ -18,6 +18,18 @@ the spec is signed off. A stable ID is worth more than a tidy sequence.
 Not requirements: implementation choices ("use a bash script"), aspirations
 ("should be fast"), restatements of the card title.
 
+## Sign-off
+
+Sign-off is recorded as one greppable line, first in `spec.md`:
+
+    Signed off: <name>, <date>
+
+A spec with this line is signed off; one without it is not — there is no
+other record. This is also what makes the concurrency rule in
+`references/living.md` checkable: whichever author's change adds this line
+second, on a `REQ-<n>` another change already signed off holding, is the one
+that has to renumber.
+
 ## Scenarios
 
 Each requirement decomposes into scenarios. A scenario is one concrete case

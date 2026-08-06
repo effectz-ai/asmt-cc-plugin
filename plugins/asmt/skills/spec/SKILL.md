@@ -5,8 +5,9 @@ description: Turn a card into a reviewed specification before any code is writte
 
 # Spec a change
 
-1. Read `.asmt/config.yml`. If it is missing, stop and tell the user to run
-   `/asmt:start`.
+1. Read `.asmt/config.yml`. If it is missing, stop and tell the user: no
+   `.asmt/config.yml` in this repo. Create one with a `verify.command` (see
+   README).
 2. Read the `spec-grammar` skill, then read whichever file in its
    `references/` matches `modes.artifacts`. If `modes.artifacts` is
    `ephemeral`, stop — that variant is not implemented yet.
@@ -27,3 +28,5 @@ description: Turn a card into a reviewed specification before any code is writte
    the card's creator for sign-off.
 8. Stop there. Do not proceed to planning or building on your own — the
    sign-off is a human gate, and a gate you walk through yourself is not one.
+9. When sign-off arrives, write `Signed off: <name>, <date>` as the first
+   line of `spec.md` and commit it. Only an actual sign-off writes that line.

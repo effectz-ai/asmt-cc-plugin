@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "asmt",
   "displayName": "ASMT Dev Workflow",
-  "description": "Effectz.AI standard AI-assisted development workflow: spec, plan, build, gate, review, land.",
+  "description": "Effectz.AI standard AI-assisted development workflow. Ships: spec, build, verify. Planned: plan, review, land.",
   "author": { "name": "Effectz.AI Platform" },
   "repository": "https://github.com/effectz-ai/asmt-cc-plugin",
   "license": "MIT",
