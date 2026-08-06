@@ -25,7 +25,7 @@ cmd_run() {
   local cmd start result seconds esc matches n_matches
   [ -f "$CONFIG" ] || die "no .asmt/config.yml in $ROOT. Run /asmt:start."
   matches="$(read_verify_command)" || die "could not read verify.command from $CONFIG"
-  n_matches="$(printf '%s\n' "$matches" | grep -c '.')"
+  n_matches="$(printf '%s\n' "$matches" | grep -c '.')" || true
   case "$n_matches" in
     0) cmd="" ;;
     1) cmd="$matches" ;;
