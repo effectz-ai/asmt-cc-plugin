@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Regression tests for the CRLF-warning noise from tests/fixtures.sh's
+# new_repo(). See specs/changes/quiet-fixture-crlf/spec.md.
+set -uo pipefail
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=fixtures.sh
+. "$HERE/fixtures.sh"
+
+fails=0
+ok()  { printf 'ok   - %s\n' "$1"; }
+bad() { printf 'FAIL - %s\n' "$1"; fails=$((fails + 1)); }
+
+# REQ-1.1: new_repo()'s own init/commit prints no CRLF warning.
+err1="$(mktemp)"
+repo="$(new_repo true 2>"$err1")"
+if grep -q 'will be replaced by CRLF' "$err1"; then
+  bad "REQ-1.1: new_repo() init/commit printed a CRLF warning"
+else
+  ok "REQ-1.1: new_repo() init/commit prints no CRLF warning"
+fi
+rm -f "$err1"
+
+# REQ-1.2: a later commit into a repo new_repo() already created also
+# prints no CRLF warning (mirrors what test-asmt-gate does with new.txt).
+err2="$(mktemp)"
+( cd "$repo" && echo hi > later.txt && git add -A && git commit -qm "later" ) 2>"$err2"
+if grep -q 'will be replaced by CRLF' "$err2"; then
+  bad "REQ-1.2: later commit into a fixture repo printed a CRLF warning"
+else
+  ok "REQ-1.2: later commit into a fixture repo prints no CRLF warning"
+fi
+rm -f "$err2"
+
+[ "$fails" -eq 0 ] || printf '\n%s assertion(s) failed\n' "$fails"
+exit "$((fails > 0))"
