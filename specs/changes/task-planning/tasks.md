@@ -59,7 +59,7 @@ anything itself.
 
 ## T-5: `task-grammar` knowledge skill
 
-- [ ] Complete
+- [x] Complete
 
 Satisfies: REQ-2.2
 
