@@ -71,7 +71,7 @@ enforces the shape.
 
 ## T-6: `/asmt:plan` entry point
 
-- [ ] Complete
+- [x] Complete
 
 Satisfies: none
 
