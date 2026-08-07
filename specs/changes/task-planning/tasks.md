@@ -49,7 +49,7 @@ for in that last case.
 
 ## T-4: `asmt-plan precheck` — replanning cannot orphan work
 
-- [ ] Complete
+- [x] Complete
 
 Satisfies: REQ-5.1, REQ-5.2
 

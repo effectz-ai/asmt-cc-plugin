@@ -281,5 +281,55 @@ case "$out" in
 esac
 rm -rf "$c"
 
+# REQ-5.1: a plan with work already done may not be replanned. Regenerating
+# a task list under a half-built change orphans commits that name task ids
+# nothing points at any more.
+c="$(new_change)"
+write_spec "$c" "$SPEC_TWO"
+write_tasks "$c" '## T-1: already built
+
+- [x] Complete
+
+Satisfies: REQ-1.1
+
+## T-2: not yet
+
+- [ ] Complete
+
+Satisfies: REQ-1.2'
+before="$(md5sum < "$c/tasks.md")"
+precheck "$c"
+if [ "$code" -ne 0 ]; then
+  ok "REQ-5.1: a plan with a completed task fails precheck"
+else
+  bad "REQ-5.1: completed task should fail precheck, got exit 0"
+fi
+case "$out" in
+  *T-1*) ok "REQ-5.1: the failure names the completed task" ;;
+  *)     bad "REQ-5.1: failure did not name T-1: $out" ;;
+esac
+if [ "$(md5sum < "$c/tasks.md")" = "$before" ]; then
+  ok "REQ-5.1: tasks.md is left byte-for-byte unchanged"
+else
+  bad "REQ-5.1: precheck modified tasks.md"
+fi
+rm -rf "$c"
+
+# REQ-5.2: nothing started yet -> replanning is safe, so precheck approves it.
+c="$(new_change)"
+write_spec "$c" "$SPEC_TWO"
+write_tasks "$c" '## T-1: not started
+
+- [ ] Complete
+
+Satisfies: REQ-1.1, REQ-1.2'
+precheck "$c"
+if [ "$code" -eq 0 ]; then
+  ok "REQ-5.2: a plan with nothing completed passes precheck"
+else
+  bad "REQ-5.2: untouched plan should pass precheck, got exit $code: $out"
+fi
+rm -rf "$c"
+
 [ "$fails" -eq 0 ] || printf '\n%s assertion(s) failed\n' "$fails"
 exit "$((fails > 0))"

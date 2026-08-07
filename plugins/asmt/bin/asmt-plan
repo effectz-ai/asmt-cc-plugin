@@ -128,7 +128,40 @@ cmd_precheck() {
     die "$spec carries no 'Signed off: <name>, <date>' first line. Get sign-off before planning."
   fi
 
+  # Replanning under work already done orphans it: the commits naming T-3 stay
+  # in history while the new plan's T-3 is something else entirely. With
+  # nothing started there is nothing to orphan, so a rewrite is free.
+  local tasks done_tasks
+  tasks="$dir/tasks.md"
+  if [ -f "$tasks" ]; then
+    done_tasks="$(completed_tasks "$tasks")"
+    if [ -n "$done_tasks" ]; then
+      printf 'asmt-plan: %s already has completed work:\n' "$tasks" >&2
+      printf '  %s\n' $done_tasks >&2
+      die "replanning would orphan it. Finish the plan, or archive the change and start a new one."
+    fi
+  fi
+
   printf 'asmt-plan: precheck ok\n'
+}
+
+# Tasks whose completion box is ticked. Reads the same `## T-<n>` sections
+# check_task_shape does; a `- [x]` anywhere inside a section marks that task.
+completed_tasks() {
+  local line current=""
+  while IFS= read -r line; do
+    case "$line" in
+      '## T-'*)
+        current="${line#\#\# }"
+        current="T-${current#T-}"
+        current="${current%%:*}"
+        current="${current%% *}"
+        ;;
+      *'- [x]'*|*'- [X]'*)
+        [ -z "$current" ] || printf '%s\n' "$current"
+        ;;
+    esac
+  done < "$1"
 }
 
 case "${1:-}" in
