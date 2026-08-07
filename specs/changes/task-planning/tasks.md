@@ -82,7 +82,7 @@ the spec is wrong, stop and say so.
 
 ## T-7: `/asmt:build` records completion and resumes
 
-- [ ] Complete
+- [x] Complete
 
 Satisfies: REQ-6.1, REQ-6.2, REQ-6.3
 

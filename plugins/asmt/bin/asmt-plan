@@ -164,8 +164,88 @@ completed_tasks() {
   done < "$1"
 }
 
+# Where the build is up to. Prints the first task with an unticked box, or
+# nothing at all when the plan is finished — the caller branches on empty
+# stdout, and the explanation goes to stderr where it cannot be mistaken for
+# a task id.
+cmd_next() {
+  local dir tasks line current="" ticked=1 first_open=""
+  dir="${1:-}"
+  [ -n "$dir" ] || die "usage: asmt-plan next <change-dir>"
+  tasks="$dir/tasks.md"
+  [ -f "$tasks" ] || die "no tasks.md at $tasks"
+
+  while IFS= read -r line; do
+    case "$line" in
+      '## T-'*)
+        if [ -n "$current" ] && [ "$ticked" -eq 0 ] && [ -z "$first_open" ]; then
+          first_open="$current"
+        fi
+        current="${line#\#\# }"
+        current="${current%%:*}"
+        current="${current%% *}"
+        ticked=0
+        ;;
+      *'- [x]'*|*'- [X]'*) ticked=1 ;;
+    esac
+  done < "$tasks"
+  if [ -n "$current" ] && [ "$ticked" -eq 0 ] && [ -z "$first_open" ]; then
+    first_open="$current"
+  fi
+
+  if [ -z "$first_open" ]; then
+    printf 'asmt-plan: every task in %s is complete — the plan is finished.\n' "$tasks" >&2
+    return 0
+  fi
+  printf '%s\n' "$first_open"
+}
+
+# Ticks one task's box. The tick means "the implementing commit has landed",
+# which is a fact about the repository — so a command records it rather than a
+# model reporting that it did.
+cmd_complete() {
+  local dir id tasks tmp line current="" hit=0
+  dir="${1:-}"; id="${2:-}"
+  [ -n "$dir" ] && [ -n "$id" ] || die "usage: asmt-plan complete <change-dir> <T-n>"
+  tasks="$dir/tasks.md"
+  [ -f "$tasks" ] || die "no tasks.md at $tasks"
+
+  tmp="$(mktemp)"
+  while IFS= read -r line; do
+    case "$line" in
+      '## T-'*)
+        current="${line#\#\# }"
+        current="${current%%:*}"
+        current="${current%% *}"
+        ;;
+      '- [ ] Complete')
+        if [ "$current" = "$id" ]; then
+          line='- [x] Complete'
+          hit=1
+        fi
+        ;;
+    esac
+    printf '%s\n' "$line"
+  done < "$tasks" > "$tmp"
+
+  if [ "$hit" -eq 0 ]; then
+    rm -f "$tmp"
+    # Either the id is not in this plan or its box is already ticked. Both are
+    # worth hearing: a silent success would leave the caller believing progress
+    # was recorded when nothing changed.
+    grep -q "^## $id:" "$tasks" \
+      && die "$id is already complete in $tasks" \
+      || die "no $id in $tasks"
+  fi
+
+  mv "$tmp" "$tasks"
+  printf 'asmt-plan: %s marked complete\n' "$id"
+}
+
 case "${1:-}" in
   cover)    shift; cmd_cover "$@" ;;
   precheck) shift; cmd_precheck "$@" ;;
-  *)        die "usage: asmt-plan [precheck|cover] <change-dir>" ;;
+  next)     shift; cmd_next "$@" ;;
+  complete) shift; cmd_complete "$@" ;;
+  *)        die "usage: asmt-plan [precheck|cover|next|complete] <change-dir>" ;;
 esac

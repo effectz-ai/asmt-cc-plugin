@@ -331,5 +331,111 @@ else
 fi
 rm -rf "$c"
 
+# --- next / complete: where the build is up to -----------------------------
+
+PLAN_THREE='## T-1: first
+
+- [ ] Complete
+
+Satisfies: REQ-1.1
+
+## T-2: second
+
+- [ ] Complete
+
+Satisfies: REQ-1.2
+
+## T-3: third
+
+- [ ] Complete
+
+Satisfies: none'
+
+# REQ-6.1: completing a task ticks that task and no other. The tick means a
+# commit has landed, so a command does it — a model claiming to have ticked
+# it is the exact class of claim this project replaces with a fact.
+c="$(new_change)"
+write_spec "$c" "$SPEC_TWO"
+write_tasks "$c" "$PLAN_THREE"
+"$PLAN" complete "$c" T-2 >/dev/null 2>&1
+code=$?
+if [ "$code" -eq 0 ]; then
+  ok "REQ-6.1: completing a task exits 0"
+else
+  bad "REQ-6.1: complete T-2 should exit 0, got $code"
+fi
+if [ "$(grep -c '^- \[x\] Complete' "$c/tasks.md")" -eq 1 ]; then
+  ok "REQ-6.1: exactly one task is ticked"
+else
+  bad "REQ-6.1: expected exactly one ticked box, got $(grep -c '^- \[x\] Complete' "$c/tasks.md")"
+fi
+if sed -n '/^## T-2:/,/^## T-3:/p' "$c/tasks.md" | grep -q '^- \[x\] Complete'; then
+  ok "REQ-6.1: the ticked task is the one named"
+else
+  bad "REQ-6.1: T-2 is not the task that got ticked"
+fi
+rm -rf "$c"
+
+# REQ-6.2: the build resumes at the first task not ticked, not at the first
+# task. Anything else re-does finished work after an interruption.
+c="$(new_change)"
+write_spec "$c" "$SPEC_TWO"
+write_tasks "$c" "$PLAN_THREE"
+"$PLAN" complete "$c" T-1 >/dev/null 2>&1
+out="$("$PLAN" next "$c" 2>/dev/null)"
+if [ "$out" = "T-2" ]; then
+  ok "REQ-6.2: next names the first task not marked complete"
+else
+  bad "REQ-6.2: next should name T-2, got '$out'"
+fi
+rm -rf "$c"
+
+# REQ-6.2: a gap in completion order still resumes at the earliest unticked
+# task, not after the last ticked one.
+c="$(new_change)"
+write_spec "$c" "$SPEC_TWO"
+write_tasks "$c" "$PLAN_THREE"
+"$PLAN" complete "$c" T-2 >/dev/null 2>&1
+out="$("$PLAN" next "$c" 2>/dev/null)"
+if [ "$out" = "T-1" ]; then
+  ok "REQ-6.2: next skips a later completed task and names the earliest open one"
+else
+  bad "REQ-6.2: with only T-2 done, next should name T-1, got '$out'"
+fi
+rm -rf "$c"
+
+# REQ-6.3: nothing left to do -> say so and start nothing. Empty stdout is
+# what the caller branches on; the explanation goes to stderr.
+c="$(new_change)"
+write_spec "$c" "$SPEC_TWO"
+write_tasks "$c" "$PLAN_THREE"
+"$PLAN" complete "$c" T-1 >/dev/null 2>&1
+"$PLAN" complete "$c" T-2 >/dev/null 2>&1
+"$PLAN" complete "$c" T-3 >/dev/null 2>&1
+out="$("$PLAN" next "$c" 2>/dev/null)"
+err="$("$PLAN" next "$c" 2>&1 >/dev/null)"
+if [ -z "$out" ]; then
+  ok "REQ-6.3: a finished plan names no next task"
+else
+  bad "REQ-6.3: finished plan should name nothing, got '$out'"
+fi
+case "$err" in
+  *finished*|*complete*) ok "REQ-6.3: a finished plan says so" ;;
+  *)                     bad "REQ-6.3: no message that the plan is finished: $err" ;;
+esac
+rm -rf "$c"
+
+# Completing a task that is not in the plan is a mistake worth hearing about,
+# not a silent no-op that leaves the caller believing progress was recorded.
+c="$(new_change)"
+write_spec "$c" "$SPEC_TWO"
+write_tasks "$c" "$PLAN_THREE"
+if "$PLAN" complete "$c" T-9 >/dev/null 2>&1; then
+  bad "REQ-6.1: completing a task not in the plan should fail"
+else
+  ok "REQ-6.1: completing a task not in the plan fails"
+fi
+rm -rf "$c"
+
 [ "$fails" -eq 0 ] || printf '\n%s assertion(s) failed\n' "$fails"
 exit "$((fails > 0))"

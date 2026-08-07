@@ -12,21 +12,25 @@ description: Implement an approved plan task by task, with tests. Use whenever t
    in this skill and take it as license to continue some other way.
 2. Read the `tdd-loop` skill and the `house-rules` skill.
 3. Read `<paths.changes>/<change-id>/spec.md` and `tasks.md`. If `tasks.md`
-   does not exist, stop and say so — there is no `/asmt:plan` yet, so the
-   task breakdown has to be written by hand for now. Do not invent one and
-   start building from it.
+   does not exist, stop and run `/asmt:plan` first. Do not invent a task
+   breakdown and start building from it.
 4. If `spec.md`, `tasks.md`, or anything else `/asmt:spec` produced is still
    uncommitted, commit it now — `/asmt:verify`'s gate refuses a dirty tree,
    and nothing before this step commits spec artifacts for you.
 5. Confirm the suite is green before touching anything: run `/asmt:verify`.
    Starting from red means you cannot tell your failures from the existing ones.
-6. Take exactly one task from `tasks.md`. Not two. Not "while I was here".
+6. Ask `asmt-plan next <paths.changes>/<change-id>` which task is open, and
+   take exactly that one. Not two. Not "while I was here". If it names
+   nothing, the plan is finished — go to step 10.
 7. Follow `tdd-loop` without exception: write the failing test, run it, watch
    it fail, write the minimum code to pass, run it, watch it pass, commit.
    Code written before its test gets deleted, not retrofitted.
 8. Every test name carries the `REQ-<n>.<m>` ID of the scenario it proves.
-9. After each task: report the task ID, the files touched, the test names
-   added, and anything you noticed but did not fix. Never report success
-   without pasting the actual test output.
-10. When all tasks are done, run `/asmt:verify` and stop. Opening the PR is a
+9. Once the commit exists, run `asmt-plan complete <change-dir> <T-n>`. Do not
+   tick the box by hand: the mark means a commit landed, and a command that
+   records it is a fact where a claim to have recorded it is not. Then report
+   the task ID, the files touched, the test names added, and anything you
+   noticed but did not fix — never success without the actual test output.
+   Return to step 6.
+10. When the plan is finished, run `/asmt:verify` and stop. Opening the PR is a
     separate step, and it is gated.
