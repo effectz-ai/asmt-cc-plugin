@@ -29,7 +29,7 @@ so `REQ-1.10` never satisfies `REQ-1.1`. No `jq`.
 
 ## T-2: `asmt-plan cover` — task format
 
-- [ ] Complete
+- [x] Complete
 
 Satisfies: REQ-2.1, REQ-3.1, REQ-3.2
 

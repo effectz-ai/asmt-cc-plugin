@@ -131,5 +131,84 @@ else
 fi
 rm -rf "$c"
 
+# REQ-2.1: task ids run T-1, T-2, ... in sequence. A gap means an id was
+# invented or a task was deleted by hand, and either way the plan no longer
+# says what it appears to say.
+c="$(new_change)"
+write_spec "$c" "$SPEC_TWO"
+write_tasks "$c" '## T-1: first
+
+Satisfies: REQ-1.1
+
+## T-3: third, with no second
+
+Satisfies: REQ-1.2'
+cover "$c"
+if [ "$code" -ne 0 ]; then
+  ok "REQ-2.1: a gap in the task sequence fails cover"
+else
+  bad "REQ-2.1: T-1 followed by T-3 should fail cover, got exit 0"
+fi
+case "$out" in
+  *T-3*|*T-2*) ok "REQ-2.1: the failure names the broken position" ;;
+  *)           bad "REQ-2.1: failure named neither T-2 nor T-3: $out" ;;
+esac
+rm -rf "$c"
+
+# REQ-2.1: ids starting somewhere other than T-1 fail too.
+c="$(new_change)"
+write_spec "$c" "$SPEC_TWO"
+write_tasks "$c" '## T-2: starts at two
+
+Satisfies: REQ-1.1, REQ-1.2'
+cover "$c"
+if [ "$code" -ne 0 ]; then
+  ok "REQ-2.1: a sequence not starting at T-1 fails cover"
+else
+  bad "REQ-2.1: sequence starting at T-2 should fail cover, got exit 0"
+fi
+rm -rf "$c"
+
+# REQ-3.1: a task with no Satisfies: line at all fails, and is named. An
+# omitted line is a defect, never an implicit "nothing".
+c="$(new_change)"
+write_spec "$c" "$SPEC_TWO"
+write_tasks "$c" '## T-1: covers everything
+
+Satisfies: REQ-1.1, REQ-1.2
+
+## T-2: says nothing about what it proves'
+cover "$c"
+if [ "$code" -ne 0 ]; then
+  ok "REQ-3.1: a task with no Satisfies: line fails cover"
+else
+  bad "REQ-3.1: missing Satisfies: should fail cover, got exit 0"
+fi
+case "$out" in
+  *T-2*) ok "REQ-3.1: the failure names the task missing the line" ;;
+  *)     bad "REQ-3.1: failure did not name T-2: $out" ;;
+esac
+rm -rf "$c"
+
+# REQ-3.2: `Satisfies: none` is a real answer — an enabling task that proves
+# no scenario of its own passes, as long as the scenarios are covered
+# elsewhere.
+c="$(new_change)"
+write_spec "$c" "$SPEC_TWO"
+write_tasks "$c" '## T-1: covers everything
+
+Satisfies: REQ-1.1, REQ-1.2
+
+## T-2: makes the next task possible
+
+Satisfies: none'
+cover "$c"
+if [ "$code" -eq 0 ]; then
+  ok "REQ-3.2: Satisfies: none passes cover"
+else
+  bad "REQ-3.2: Satisfies: none should pass, got exit $code: $out"
+fi
+rm -rf "$c"
+
 [ "$fails" -eq 0 ] || printf '\n%s assertion(s) failed\n' "$fails"
 exit "$((fails > 0))"

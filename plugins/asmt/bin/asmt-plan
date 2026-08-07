@@ -30,6 +30,49 @@ task_claims() {
     | sort -u || true
 }
 
+# The plan's own shape, checked before its coverage is worth believing: task
+# ids run T-1, T-2, ... in sequence, and every task carries a Satisfies: line.
+# A gap in the sequence means an id was invented or a task deleted by hand; an
+# omitted Satisfies: line is a defect, never an implicit "this proves nothing"
+# — that has to be said out loud as `Satisfies: none`.
+check_task_shape() {
+  local tasks="$1" bad_shape="" expected=1 seen_satisfies=1 current=""
+  local line n
+
+  while IFS= read -r line; do
+    case "$line" in
+      '## T-'*)
+        if [ -n "$current" ] && [ "$seen_satisfies" -eq 0 ]; then
+          bad_shape="$bad_shape  $current has no Satisfies: line"$'\n'
+        fi
+        n="${line#\#\# T-}"
+        n="${n%%:*}"
+        n="${n%% *}"
+        current="T-$n"
+        if [ "$n" != "$expected" ]; then
+          bad_shape="$bad_shape  expected T-$expected, found $current"$'\n'
+          expected="$n"
+        fi
+        expected=$((expected + 1))
+        seen_satisfies=0
+        ;;
+      'Satisfies:'*)
+        seen_satisfies=1
+        ;;
+    esac
+  done < "$tasks"
+
+  if [ -n "$current" ] && [ "$seen_satisfies" -eq 0 ]; then
+    bad_shape="$bad_shape  $current has no Satisfies: line"$'\n'
+  fi
+
+  [ -z "$bad_shape" ] || {
+    printf 'asmt-plan: the plan is malformed:\n' >&2
+    printf '%s' "$bad_shape" >&2
+    return 1
+  }
+}
+
 cmd_cover() {
   local dir spec tasks scenarios claims uncovered unknown
   dir="${1:-}"
@@ -42,6 +85,9 @@ cmd_cover() {
   # nothing to check, and reporting that as a pass is worse than reporting
   # nothing at all.
   [ -f "$tasks" ] || die "no tasks.md at $tasks — nothing to check coverage against."
+
+  local shape_ok=1
+  check_task_shape "$tasks" || shape_ok=0
 
   scenarios="$(spec_scenarios "$spec")"
   claims="$(task_claims "$tasks")"
@@ -57,7 +103,7 @@ cmd_cover() {
     printf 'asmt-plan: tasks claim scenarios the spec does not contain:\n' >&2
     printf '  %s\n' $unknown >&2
   fi
-  [ -z "$uncovered$unknown" ] || exit 1
+  [ -z "$uncovered$unknown" ] && [ "$shape_ok" -eq 1 ] || exit 1
 
   printf 'asmt-plan: cover ok (%s scenario(s))\n' "$(printf '%s\n' "$scenarios" | grep -c .)"
 }
