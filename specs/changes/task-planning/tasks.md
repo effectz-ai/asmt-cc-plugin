@@ -39,7 +39,7 @@ valid and must pass; an omitted line must not.
 
 ## T-3: `asmt-plan precheck` — sign-off is required
 
-- [ ] Complete
+- [x] Complete
 
 Satisfies: REQ-1.1, REQ-1.2, REQ-1.3
 

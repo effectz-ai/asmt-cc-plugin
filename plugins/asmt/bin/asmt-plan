@@ -108,7 +108,31 @@ cmd_cover() {
   printf 'asmt-plan: cover ok (%s scenario(s))\n' "$(printf '%s\n' "$scenarios" | grep -c .)"
 }
 
+# What must be true before a plan is written. Sign-off is the checkpoint that
+# freezes requirement numbers, so planning against an unsigned spec plans
+# against numbers that can still move underneath it.
+cmd_precheck() {
+  local dir spec
+  dir="${1:-}"
+  [ -n "$dir" ] || die "usage: asmt-plan precheck <change-dir>"
+  spec="$dir/spec.md"
+
+  [ -f "$spec" ] || die "no spec.md at $spec — nothing to plan."
+
+  # First line, not merely present. A sign-off buried in the body is prose;
+  # treating it as a signature would let anyone sign by mentioning it.
+  if ! head -n 1 "$spec" | grep -q '^Signed off:'; then
+    if grep -q '^Signed off:' "$spec"; then
+      die "$spec has a 'Signed off:' line, but not as its first line. The grammar defines sign-off as the first line."
+    fi
+    die "$spec carries no 'Signed off: <name>, <date>' first line. Get sign-off before planning."
+  fi
+
+  printf 'asmt-plan: precheck ok\n'
+}
+
 case "${1:-}" in
-  cover) shift; cmd_cover "$@" ;;
-  *)     die "usage: asmt-plan cover <change-dir>" ;;
+  cover)    shift; cmd_cover "$@" ;;
+  precheck) shift; cmd_precheck "$@" ;;
+  *)        die "usage: asmt-plan [precheck|cover] <change-dir>" ;;
 esac
