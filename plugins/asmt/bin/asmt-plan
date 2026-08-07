@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# asmt-plan — the checkable half of planning. `cover` answers whether a
+# tasks.md and the spec.md beside it actually agree: every scenario claimed by
+# some task, every claim naming a scenario that exists. /asmt:plan writes the
+# prose; this decides whether the prose adds up.
+set -euo pipefail
+
+die() { printf 'asmt-plan: %s\n' "$*" >&2; exit 1; }
+
+# A scenario is *declared* by a line that begins with its id — allowing for
+# heading hashes — and nothing else before it. That admits both `### REQ-1.1`
+# and `REQ-1.1: Given ...`, and excludes the far more common case of an id
+# mentioned mid-sentence in prose.
+#
+# ponytail: line-anchored sed, not a markdown parser. The ceiling is a spec
+# that declares a scenario somewhere other than the start of a line; if that
+# ever happens, the fix is to require heading form, not to parse markdown.
+spec_scenarios() {
+  sed -n -E 's/^[[:space:]]*#*[[:space:]]*(REQ-[0-9]+\.[0-9]+)([:[:space:]].*)?$/\1/p' "$1" \
+    | sort -u
+}
+
+# Ids claimed by tasks. Tokenising the whole `Satisfies:` value and matching
+# each token exactly is what keeps REQ-1.10 from covering REQ-1.1 — the same
+# both-ends-delimited rule tdd-loop applies to test names, enforced here by
+# comparing whole tokens rather than searching for substrings.
+task_claims() {
+  sed -n -E 's/^[[:space:]]*Satisfies:[[:space:]]*//p' "$1" \
+    | grep -oE 'REQ-[0-9]+\.[0-9]+' \
+    | sort -u || true
+}
+
+cmd_cover() {
+  local dir spec tasks scenarios claims uncovered unknown
+  dir="${1:-}"
+  [ -n "$dir" ] || die "usage: asmt-plan cover <change-dir>"
+  spec="$dir/spec.md"
+  tasks="$dir/tasks.md"
+
+  [ -f "$spec" ]  || die "no spec.md at $spec"
+  # Vacuous coverage is the failure this guards against: with no plan there is
+  # nothing to check, and reporting that as a pass is worse than reporting
+  # nothing at all.
+  [ -f "$tasks" ] || die "no tasks.md at $tasks — nothing to check coverage against."
+
+  scenarios="$(spec_scenarios "$spec")"
+  claims="$(task_claims "$tasks")"
+
+  uncovered="$(comm -23 <(printf '%s\n' "$scenarios") <(printf '%s\n' "$claims"))"
+  unknown="$(comm -13 <(printf '%s\n' "$scenarios") <(printf '%s\n' "$claims"))"
+
+  if [ -n "$uncovered" ]; then
+    printf 'asmt-plan: scenarios no task satisfies:\n' >&2
+    printf '  %s\n' $uncovered >&2
+  fi
+  if [ -n "$unknown" ]; then
+    printf 'asmt-plan: tasks claim scenarios the spec does not contain:\n' >&2
+    printf '  %s\n' $unknown >&2
+  fi
+  [ -z "$uncovered$unknown" ] || exit 1
+
+  printf 'asmt-plan: cover ok (%s scenario(s))\n' "$(printf '%s\n' "$scenarios" | grep -c .)"
+}
+
+case "${1:-}" in
+  cover) shift; cmd_cover "$@" ;;
+  *)     die "usage: asmt-plan cover <change-dir>" ;;
+esac

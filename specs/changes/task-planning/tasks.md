@@ -18,7 +18,7 @@ before writing and the other after.
 
 ## T-1: `asmt-plan cover` — scenario coverage
 
-- [ ] Complete
+- [x] Complete
 
 Satisfies: REQ-4.1, REQ-4.2, REQ-4.3, REQ-4.4, REQ-4.5
 
