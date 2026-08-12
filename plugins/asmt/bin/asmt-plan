@@ -1,0 +1,251 @@
+#!/usr/bin/env bash
+# asmt-plan — the checkable half of planning. `cover` answers whether a
+# tasks.md and the spec.md beside it actually agree: every scenario claimed by
+# some task, every claim naming a scenario that exists. /asmt:plan writes the
+# prose; this decides whether the prose adds up.
+set -euo pipefail
+
+die() { printf 'asmt-plan: %s\n' "$*" >&2; exit 1; }
+
+# A scenario is *declared* by a line that begins with its id — allowing for
+# heading hashes — and nothing else before it. That admits both `### REQ-1.1`
+# and `REQ-1.1: Given ...`, and excludes the far more common case of an id
+# mentioned mid-sentence in prose.
+#
+# ponytail: line-anchored sed, not a markdown parser. The ceiling is a spec
+# that declares a scenario somewhere other than the start of a line; if that
+# ever happens, the fix is to require heading form, not to parse markdown.
+spec_scenarios() {
+  sed -n -E 's/^[[:space:]]*#*[[:space:]]*(REQ-[0-9]+\.[0-9]+)([:[:space:]].*)?$/\1/p' "$1" \
+    | sort -u
+}
+
+# Ids claimed by tasks. Tokenising the whole `Satisfies:` value and matching
+# each token exactly is what keeps REQ-1.10 from covering REQ-1.1 — the same
+# both-ends-delimited rule tdd-loop applies to test names, enforced here by
+# comparing whole tokens rather than searching for substrings.
+task_claims() {
+  sed -n -E 's/^[[:space:]]*Satisfies:[[:space:]]*//p' "$1" \
+    | grep -oE 'REQ-[0-9]+\.[0-9]+' \
+    | sort -u || true
+}
+
+# The plan's own shape, checked before its coverage is worth believing: task
+# ids run T-1, T-2, ... in sequence, and every task carries a Satisfies: line.
+# A gap in the sequence means an id was invented or a task deleted by hand; an
+# omitted Satisfies: line is a defect, never an implicit "this proves nothing"
+# — that has to be said out loud as `Satisfies: none`.
+check_task_shape() {
+  local tasks="$1" bad_shape="" expected=1 seen_satisfies=1 current=""
+  local line n
+
+  while IFS= read -r line; do
+    case "$line" in
+      '## T-'*)
+        if [ -n "$current" ] && [ "$seen_satisfies" -eq 0 ]; then
+          bad_shape="$bad_shape  $current has no Satisfies: line"$'\n'
+        fi
+        n="${line#\#\# T-}"
+        n="${n%%:*}"
+        n="${n%% *}"
+        current="T-$n"
+        if [ "$n" != "$expected" ]; then
+          bad_shape="$bad_shape  expected T-$expected, found $current"$'\n'
+          expected="$n"
+        fi
+        expected=$((expected + 1))
+        seen_satisfies=0
+        ;;
+      'Satisfies:'*)
+        seen_satisfies=1
+        ;;
+    esac
+  done < "$tasks"
+
+  if [ -n "$current" ] && [ "$seen_satisfies" -eq 0 ]; then
+    bad_shape="$bad_shape  $current has no Satisfies: line"$'\n'
+  fi
+
+  [ -z "$bad_shape" ] || {
+    printf 'asmt-plan: the plan is malformed:\n' >&2
+    printf '%s' "$bad_shape" >&2
+    return 1
+  }
+}
+
+cmd_cover() {
+  local dir spec tasks scenarios claims uncovered unknown
+  dir="${1:-}"
+  [ -n "$dir" ] || die "usage: asmt-plan cover <change-dir>"
+  spec="$dir/spec.md"
+  tasks="$dir/tasks.md"
+
+  [ -f "$spec" ]  || die "no spec.md at $spec"
+  # Vacuous coverage is the failure this guards against: with no plan there is
+  # nothing to check, and reporting that as a pass is worse than reporting
+  # nothing at all.
+  [ -f "$tasks" ] || die "no tasks.md at $tasks — nothing to check coverage against."
+
+  local shape_ok=1
+  check_task_shape "$tasks" || shape_ok=0
+
+  scenarios="$(spec_scenarios "$spec")"
+  claims="$(task_claims "$tasks")"
+
+  uncovered="$(comm -23 <(printf '%s\n' "$scenarios") <(printf '%s\n' "$claims"))"
+  unknown="$(comm -13 <(printf '%s\n' "$scenarios") <(printf '%s\n' "$claims"))"
+
+  if [ -n "$uncovered" ]; then
+    printf 'asmt-plan: scenarios no task satisfies:\n' >&2
+    printf '  %s\n' $uncovered >&2
+  fi
+  if [ -n "$unknown" ]; then
+    printf 'asmt-plan: tasks claim scenarios the spec does not contain:\n' >&2
+    printf '  %s\n' $unknown >&2
+  fi
+  [ -z "$uncovered$unknown" ] && [ "$shape_ok" -eq 1 ] || exit 1
+
+  printf 'asmt-plan: cover ok (%s scenario(s))\n' "$(printf '%s\n' "$scenarios" | grep -c .)"
+}
+
+# What must be true before a plan is written. Sign-off is the checkpoint that
+# freezes requirement numbers, so planning against an unsigned spec plans
+# against numbers that can still move underneath it.
+cmd_precheck() {
+  local dir spec
+  dir="${1:-}"
+  [ -n "$dir" ] || die "usage: asmt-plan precheck <change-dir>"
+  spec="$dir/spec.md"
+
+  [ -f "$spec" ] || die "no spec.md at $spec — nothing to plan."
+
+  # First line, not merely present. A sign-off buried in the body is prose;
+  # treating it as a signature would let anyone sign by mentioning it.
+  if ! head -n 1 "$spec" | grep -q '^Signed off:'; then
+    if grep -q '^Signed off:' "$spec"; then
+      die "$spec has a 'Signed off:' line, but not as its first line. The grammar defines sign-off as the first line."
+    fi
+    die "$spec carries no 'Signed off: <name>, <date>' first line. Get sign-off before planning."
+  fi
+
+  # Replanning under work already done orphans it: the commits naming T-3 stay
+  # in history while the new plan's T-3 is something else entirely. With
+  # nothing started there is nothing to orphan, so a rewrite is free.
+  local tasks done_tasks
+  tasks="$dir/tasks.md"
+  if [ -f "$tasks" ]; then
+    done_tasks="$(completed_tasks "$tasks")"
+    if [ -n "$done_tasks" ]; then
+      printf 'asmt-plan: %s already has completed work:\n' "$tasks" >&2
+      printf '  %s\n' $done_tasks >&2
+      die "replanning would orphan it. Finish the plan, or archive the change and start a new one."
+    fi
+  fi
+
+  printf 'asmt-plan: precheck ok\n'
+}
+
+# Tasks whose completion box is ticked. Reads the same `## T-<n>` sections
+# check_task_shape does; a `- [x]` anywhere inside a section marks that task.
+completed_tasks() {
+  local line current=""
+  while IFS= read -r line; do
+    case "$line" in
+      '## T-'*)
+        current="${line#\#\# }"
+        current="T-${current#T-}"
+        current="${current%%:*}"
+        current="${current%% *}"
+        ;;
+      *'- [x]'*|*'- [X]'*)
+        [ -z "$current" ] || printf '%s\n' "$current"
+        ;;
+    esac
+  done < "$1"
+}
+
+# Where the build is up to. Prints the first task with an unticked box, or
+# nothing at all when the plan is finished — the caller branches on empty
+# stdout, and the explanation goes to stderr where it cannot be mistaken for
+# a task id.
+cmd_next() {
+  local dir tasks line current="" ticked=1 first_open=""
+  dir="${1:-}"
+  [ -n "$dir" ] || die "usage: asmt-plan next <change-dir>"
+  tasks="$dir/tasks.md"
+  [ -f "$tasks" ] || die "no tasks.md at $tasks"
+
+  while IFS= read -r line; do
+    case "$line" in
+      '## T-'*)
+        if [ -n "$current" ] && [ "$ticked" -eq 0 ] && [ -z "$first_open" ]; then
+          first_open="$current"
+        fi
+        current="${line#\#\# }"
+        current="${current%%:*}"
+        current="${current%% *}"
+        ticked=0
+        ;;
+      *'- [x]'*|*'- [X]'*) ticked=1 ;;
+    esac
+  done < "$tasks"
+  if [ -n "$current" ] && [ "$ticked" -eq 0 ] && [ -z "$first_open" ]; then
+    first_open="$current"
+  fi
+
+  if [ -z "$first_open" ]; then
+    printf 'asmt-plan: every task in %s is complete — the plan is finished.\n' "$tasks" >&2
+    return 0
+  fi
+  printf '%s\n' "$first_open"
+}
+
+# Ticks one task's box. The tick means "the implementing commit has landed",
+# which is a fact about the repository — so a command records it rather than a
+# model reporting that it did.
+cmd_complete() {
+  local dir id tasks tmp line current="" hit=0
+  dir="${1:-}"; id="${2:-}"
+  [ -n "$dir" ] && [ -n "$id" ] || die "usage: asmt-plan complete <change-dir> <T-n>"
+  tasks="$dir/tasks.md"
+  [ -f "$tasks" ] || die "no tasks.md at $tasks"
+
+  tmp="$(mktemp)"
+  while IFS= read -r line; do
+    case "$line" in
+      '## T-'*)
+        current="${line#\#\# }"
+        current="${current%%:*}"
+        current="${current%% *}"
+        ;;
+      '- [ ] Complete')
+        if [ "$current" = "$id" ]; then
+          line='- [x] Complete'
+          hit=1
+        fi
+        ;;
+    esac
+    printf '%s\n' "$line"
+  done < "$tasks" > "$tmp"
+
+  if [ "$hit" -eq 0 ]; then
+    rm -f "$tmp"
+    # Either the id is not in this plan or its box is already ticked. Both are
+    # worth hearing: a silent success would leave the caller believing progress
+    # was recorded when nothing changed.
+    grep -q "^## $id:" "$tasks" \
+      && die "$id is already complete in $tasks" \
+      || die "no $id in $tasks"
+  fi
+
+  mv "$tmp" "$tasks"
+  printf 'asmt-plan: %s marked complete\n' "$id"
+}
+
+case "${1:-}" in
+  cover)    shift; cmd_cover "$@" ;;
+  precheck) shift; cmd_precheck "$@" ;;
+  next)     shift; cmd_next "$@" ;;
+  complete) shift; cmd_complete "$@" ;;
+  *)        die "usage: asmt-plan [precheck|cover|next|complete] <change-dir>" ;;
+esac
