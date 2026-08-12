@@ -1,0 +1,22 @@
+version: 1
+
+# the three independent switches
+modes:
+  artifacts: living        # living | ephemeral
+  loop: tdd                # tdd | code-then-test
+  topology: sequential     # sequential | subagent
+
+# per-card override: chore collapses the human gates
+size_classes:
+  chore:    { spec: lite,  plan: skip, gates: [verify] }
+  standard: { spec: full,  plan: full, gates: [verify, self-review, sse-review] }
+  risky:    { spec: full,  plan: full, gates: [verify, self-review, model-review, sse-review] }
+default_size_class: standard
+
+verify:
+  command: "tests/run-all"
+  timeout_seconds: 900
+
+paths:
+  changes: "specs/changes"
+  living:  "specs/current"

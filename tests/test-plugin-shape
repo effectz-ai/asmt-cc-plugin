@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# Structural checks on the plugin: frontmatter present, bodies within budget.
+set -uo pipefail
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+PLUGIN="$HERE/../plugins/asmt"
+
+fails=0
+ok()   { printf 'ok   - %s\n' "$1"; }
+bad()  { printf 'FAIL - %s\n' "$1"; fails=$((fails + 1)); }
+skip() { printf 'skip - %s\n' "$1"; }
+
+skills=$(find "$PLUGIN/skills" -name SKILL.md 2>/dev/null | sort)
+[ -n "$skills" ] || bad "no SKILL.md files found under $PLUGIN/skills"
+
+for s in $skills; do
+  rel="${s#"$PLUGIN"/}"
+
+  head -n 1 "$s" | grep -qx -- '---' \
+    && ok "$rel: opens with frontmatter" || bad "$rel: missing opening ---"
+
+  grep -qE '^name: [a-z0-9-]+$' "$s" \
+    && ok "$rel: has a kebab-case name" || bad "$rel: missing or malformed name:"
+
+  desc=$(sed -n 's/^description: //p' "$s" | head -n 1)
+  [ "${#desc}" -ge 60 ] \
+    && ok "$rel: description is substantial" \
+    || bad "$rel: description too short (${#desc} chars) — it is the trigger mechanism"
+
+  lines=$(wc -l < "$s")
+  [ "$lines" -le 500 ] \
+    && ok "$rel: body within budget ($lines lines)" \
+    || bad "$rel: $lines lines — split into references/"
+done
+
+# Every ATTRIBUTION.md row must point at a file that exists, cite the SHA
+# pinned in vendor/UPSTREAM_SHAS for its upstream project, and (when a clone
+# of that project is present) name a path real at that SHA.
+attribution="$PLUGIN/ATTRIBUTION.md"
+shas="$HERE/../vendor/UPSTREAM_SHAS"
+if [ -f "$attribution" ]; then
+  rows=0
+  while IFS='|' read -r _ ourfile upstream upstreampath sha _; do
+    ourfile="$(printf '%s' "$ourfile" | sed 's/^ *//; s/ *$//')"
+    case "$ourfile" in
+      ''|'our file'|---*|:---*) continue ;;
+    esac
+    rows=$((rows + 1))
+    upstream="$(printf '%s' "$upstream" | sed 's/^ *//; s/ *$//')"
+    upstreampath="$(printf '%s' "$upstreampath" | sed 's/^ *//; s/ *$//')"
+    sha="$(printf '%s' "$sha" | sed 's/^ *//; s/ *$//')"
+    project="${upstream%% *}"
+
+    [ -f "$PLUGIN/$ourfile" ] \
+      && ok "attribution: $ourfile exists" \
+      || bad "attribution: $ourfile listed but missing"
+
+    expected="$(awk -v p="$project" '$1==p{print $2}' "$shas" 2>/dev/null)"
+    if [ -z "$expected" ]; then
+      bad "attribution: $ourfile references unknown upstream project '$project' (not in vendor/UPSTREAM_SHAS)"
+    elif [ "$sha" = "$expected" ]; then
+      ok "attribution: $ourfile SHA matches vendor/UPSTREAM_SHAS for $project"
+    else
+      bad "attribution: $ourfile SHA $sha does not match vendor/UPSTREAM_SHAS for $project ($expected)"
+    fi
+
+    clone="$HERE/../vendor/upstream/$project"
+    if [ -d "$clone/.git" ]; then
+      git -C "$clone" cat-file -e "$sha:$upstreampath" 2>/dev/null \
+        && ok "attribution: $ourfile upstream path exists at $sha in the $project clone" \
+        || bad "attribution: $ourfile upstream path '$upstreampath' not found at $sha in the $project clone"
+    else
+      skip "attribution: $ourfile upstream path unverified — no $project clone at $clone (gitignored, not required)"
+    fi
+  done < "$attribution"
+  [ "$rows" -gt 0 ] \
+    && ok "attribution: $rows row(s) checked" \
+    || bad "attribution: 0 row(s) checked — the check found no rows to validate"
+else
+  bad "ATTRIBUTION.md missing"
+fi
+# ponytail: a ported file with zero ATTRIBUTION rows for it is not detected —
+# nothing marks a file as "this came from upstream" independent of the row
+# itself, so a missing row is invisible to this checker. Upgrade path: a
+# marker convention in ported files (e.g. a frontmatter/comment tag) this
+# check could grep for and cross-reference, if that gap ever bites.
+
+[ "$fails" -eq 0 ] || printf '\n%s assertion(s) failed\n' "$fails"
+exit "$((fails > 0))"

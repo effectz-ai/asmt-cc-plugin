@@ -1,12 +1,8 @@
 {
-  "name": "asmt-cc-plugin",
-  "description": "ASMT Claude Code plugin: an installable spec-before-code AI dev workflow — three effort lanes, a hard verification gate, archive-on-merge living specs.",
-  "owner": { "name": "effectz-ai" },
+  "name": "effectz",
+  "owner": { "name": "Effectz.AI Platform", "email": "dev@effectz.ai" },
+  "description": "Effectz.AI in-house workflow plugins for Claude Code.",
   "plugins": [
-    {
-      "name": "asmt",
-      "source": "./asmt",
-      "description": "Spec-before-code, lane-sized AI dev workflow (OpenSpec + Claude Code + a hard verification gate), installable into any project."
-    }
+    { "name": "asmt", "source": "./plugins/asmt" }
   ]
 }
