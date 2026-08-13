@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+# Offline unit tests for tests/run-triggers. Spawns no nested session and costs
+# nothing — that is why this file is named test-* and the runner is not.
+# See specs/changes/skill-triggers/spec.md.
+set -uo pipefail
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+RUNNER="$HERE/run-triggers"
+
+fails=0
+ok()  { printf 'ok   - %s\n' "$1"; }
+bad() { printf 'FAIL - %s\n' "$1"; fails=$((fails + 1)); }
+
+# A captured session log holding one Skill invocation per named skill, in the
+# shape `claude -p --output-format stream-json` emits.
+log_with() {
+  local f
+  f="$(mktemp)"
+  {
+    printf '{"type":"system","subtype":"init","session_id":"t"}\n'
+    for s in "$@"; do
+      printf '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"%s"}}]}}\n' "$s"
+    done
+    printf '{"type":"result","subtype":"success"}\n'
+  } > "$f"
+  printf '%s' "$f"
+}
+
+out=""; code=0
+judge() { out="$("$RUNNER" --judge "$1" "$2" "$3" 2>&1)"; code=$?; }
+
+# REQ-1.1: a should-fire case passes only when the named skill was invoked.
+# The phrasings that decide whether it *does* fire are T-2's job; this is the
+# half that decides what the answer means.
+log="$(log_with 'asmt:spec')"
+judge "$log" spec should-fire
+if [ "$code" -eq 0 ]; then
+  ok "REQ-1.1: should-fire passes when the skill was invoked"
+else
+  bad "REQ-1.1: should-fire should pass when the skill fired, got exit $code: $out"
+fi
+rm -f "$log"
+
+log="$(log_with)"
+judge "$log" spec should-fire
+if [ "$code" -ne 0 ]; then
+  ok "REQ-1.1: should-fire fails when no skill was invoked"
+else
+  bad "REQ-1.1: should-fire should fail when nothing fired, got exit 0"
+fi
+rm -f "$log"
+
+# The plugin namespace prefix is optional — a skill invoked as `spec` and one
+# invoked as `asmt:spec` are the same skill firing.
+log="$(log_with 'spec')"
+judge "$log" spec should-fire
+if [ "$code" -eq 0 ]; then
+  ok "REQ-1.1: an unprefixed skill name counts as the same skill"
+else
+  bad "REQ-1.1: bare 'spec' should match skill 'spec', got exit $code: $out"
+fi
+rm -f "$log"
+
+# A skill whose name merely contains ours is a different skill. Same
+# whole-token discipline the REQ id matching uses, for the same reason.
+log="$(log_with 'asmt:spec-grammar')"
+judge "$log" spec should-fire
+if [ "$code" -ne 0 ]; then
+  ok "REQ-1.1: spec-grammar firing does not count as spec firing"
+else
+  bad "REQ-1.1: 'spec-grammar' should not satisfy 'spec', got exit 0"
+fi
+rm -f "$log"
+
+# REQ-2.1 semantics: a should-not-fire case fails when the skill did fire.
+log="$(log_with 'asmt:spec')"
+judge "$log" spec should-not-fire
+if [ "$code" -ne 0 ]; then
+  ok "REQ-2.1: should-not-fire fails when the skill was invoked"
+else
+  bad "REQ-2.1: should-not-fire should fail when the skill fired, got exit 0"
+fi
+rm -f "$log"
+
+# REQ-2.2: a should-not-fire case passes even when some *other* skill fired.
+# The assertion is about the named skill only — otherwise every negative case
+# would also be asserting that the model did nothing at all, which is not what
+# is being tested.
+log="$(log_with 'asmt:build' 'asmt:verify')"
+judge "$log" spec should-not-fire
+if [ "$code" -eq 0 ]; then
+  ok "REQ-2.2: should-not-fire passes when a different skill fired"
+else
+  bad "REQ-2.2: another skill firing should not fail a should-not-fire case: $out"
+fi
+rm -f "$log"
+
+# REQ-6.2: the report says what actually fired, so a failure can be read
+# without opening the log.
+log="$(log_with 'asmt:build' 'asmt:verify')"
+judge "$log" spec should-fire
+case "$out" in
+  *asmt:build*) ok "REQ-6.2: the report lists the skills that fired" ;;
+  *)            bad "REQ-6.2: report did not list asmt:build: $out" ;;
+esac
+rm -f "$log"
+
+# REQ-6.2: and says so plainly when nothing fired at all.
+log="$(log_with)"
+judge "$log" spec should-fire
+case "$out" in
+  *none*) ok "REQ-6.2: the report says none when nothing fired" ;;
+  *)      bad "REQ-6.2: report did not say none: $out" ;;
+esac
+rm -f "$log"
+
+[ "$fails" -eq 0 ] || printf '\n%s assertion(s) failed\n' "$fails"
+exit "$((fails > 0))"

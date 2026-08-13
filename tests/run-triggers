@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# run-triggers — do the entry-point skills actually fire on the phrasings a
+# person would type? Every case spawns a real nested `claude -p` session, so
+# this costs wall-clock and tokens and is deliberately NOT named test-*:
+# tests/run-all globs that pattern, and the verification gate must stay fast,
+# offline and free.
+#
+# The offline half — deciding a case from a captured log — is a mode of this
+# same script (`--judge`), so tests/test-trigger-runner exercises the code that
+# really runs rather than a copy of it.
+set -uo pipefail
+
+die() { printf 'run-triggers: %s\n' "$*" >&2; exit 1; }
+
+# Skills invoked in a captured stream-json session log, one per line, in the
+# order they appear.
+#
+# ponytail: grep over the log rather than a JSON parser — jq is not a
+# dependency we want, and the field is emitted on one line. The ceiling is a
+# harness that starts pretty-printing stream-json across lines; the fix then is
+# a real parser, not a cleverer regex.
+skills_fired() {
+  grep -o '"skill":"[^"]*"' "$1" 2>/dev/null \
+    | sed -e 's/^"skill":"//' -e 's/"$//' \
+    | sort -u
+}
+
+# Did $2 fire, as a whole skill name? The plugin namespace prefix is optional,
+# so `spec` and `asmt:spec` are the same skill — but `spec-grammar` is not,
+# which is why this compares whole names instead of searching for a substring.
+skill_in() {
+  local fired="$1" want="$2" name
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    [ "$name" = "$want" ] && return 0
+    [ "${name##*:}" = "$want" ] && return 0
+  done <<< "$fired"
+  return 1
+}
+
+# Decide one case from its captured log. Exit 0 when the case passes.
+cmd_judge() {
+  local log="${1:-}" skill="${2:-}" expectation="${3:-}" fired verdict
+  [ -n "$log" ] && [ -n "$skill" ] && [ -n "$expectation" ] \
+    || die "usage: run-triggers --judge <log> <skill> <should-fire|should-not-fire>"
+  [ -f "$log" ] || die "no such log: $log"
+
+  fired="$(skills_fired "$log")"
+  printf 'skills fired: %s\n' "${fired:-none}" | tr '\n' ' '
+  printf '\n'
+
+  case "$expectation" in
+    should-fire)
+      skill_in "$fired" "$skill" && verdict=0 || verdict=1
+      ;;
+    should-not-fire)
+      skill_in "$fired" "$skill" && verdict=1 || verdict=0
+      ;;
+    *)
+      die "unknown expectation: $expectation"
+      ;;
+  esac
+  return "$verdict"
+}
+
+case "${1:-}" in
+  --judge) shift; cmd_judge "$@" ;;
+  *)       die "usage: run-triggers --judge <log> <skill> <expectation>" ;;
+esac
