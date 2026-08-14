@@ -89,8 +89,74 @@ cmd_list() {
   done < <(find "$CASES" -name '*.txt' | sort)
 }
 
+PLUGIN_DIR="$(cd "$HERE/../plugins/asmt" && pwd)"
+
+# One attempt: run the prompt in $1, write the session log to $2.
+#
+# The whole command is replaceable through ASMT_TRIGGER_CMD, which is the seam
+# the offline tests use — a fake can record the environment it was handed and
+# emit a canned log, so isolation, retry and skip behaviour are all testable
+# without spending a token.
+attempt() {
+  local prompt_file="$1" log_file="$2"
+  if [ -n "${ASMT_TRIGGER_CMD:-}" ]; then
+    "$ASMT_TRIGGER_CMD" "$prompt_file" "$log_file"
+    return $?
+  fi
+  timeout 300 claude -p "$(cat "$prompt_file")" \
+    --plugin-dir "$PLUGIN_DIR" \
+    --dangerously-skip-permissions \
+    --max-turns 3 \
+    --output-format stream-json \
+    > "$log_file" 2>&1
+}
+
+# Runs one case in a sandbox and returns the judge's verdict.
+#
+# The sandbox is the point. These sessions run with permissions skipped, so
+# they get a HOME with no plugin installed in it (ours arrives via
+# --plugin-dir, and nothing else should be competing) and a throwaway working
+# directory that is not this repository. Anything the session decides to
+# create, it creates there.
+run_case() {
+  local skill="$1" expectation="$2" prompt_file="$3" log_file="$4"
+  local sandbox rc
+  sandbox="$(mktemp -d)"
+  mkdir -p "$sandbox/home" "$sandbox/project"
+  (
+    cd "$sandbox/project" || exit 1
+    HOME="$sandbox/home" attempt "$prompt_file" "$log_file"
+  )
+  rc=$?
+  rm -rf "$sandbox"
+  [ "$rc" -eq 0 ] || return 2   # the attempt itself failed to run
+  cmd_judge "$log_file" "$skill" "$expectation" >/dev/null 2>&1
+}
+
+cmd_run() {
+  local runs skill expectation prompt_file log_file failed=0 n=0
+  runs="$(mktemp -d)"
+  printf 'run-triggers: logs in %s\n\n' "$runs"
+
+  while read -r skill expectation prompt_file; do
+    [ -n "$skill" ] || continue
+    n=$((n + 1))
+    log_file="$runs/${skill}-${expectation}-$(basename "$prompt_file" .txt).json"
+    if run_case "$skill" "$expectation" "$prompt_file" "$log_file"; then
+      printf 'ok   - %s %s %s\n' "$skill" "$expectation" "$(basename "$prompt_file" .txt)"
+    else
+      printf 'FAIL - %s %s %s\n' "$skill" "$expectation" "$(basename "$prompt_file" .txt)"
+      failed=$((failed + 1))
+    fi
+  done < <(cmd_list)
+
+  printf '\n%s case(s), %s failed\n' "$n" "$failed"
+  [ "$failed" -eq 0 ]
+}
+
 case "${1:-}" in
   --judge) shift; cmd_judge "$@" ;;
   --list)  shift; cmd_list "$@" ;;
-  *)       die "usage: run-triggers [--list|--judge <log> <skill> <expectation>]" ;;
+  --run|"") shift 2>/dev/null || true; cmd_run ;;
+  *)       die "usage: run-triggers [--run|--list|--judge <log> <skill> <expectation>]" ;;
 esac

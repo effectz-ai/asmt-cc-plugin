@@ -171,5 +171,86 @@ else
 fi
 rm -rf "$tmpdir"
 
+# --- isolation -------------------------------------------------------------
+#
+# Attempts run with permissions skipped, so where they run matters more than
+# what they say. The fake attempt records the environment it was handed, which
+# is how these assertions see inside a run without spawning anything.
+
+# A fake attempt command: records HOME and cwd, then emits a canned log in
+# which the expected skill fired, so every case passes and the run completes.
+make_fake() {
+  local f="$1" record="$2"
+  cat > "$f" <<FAKE
+#!/usr/bin/env bash
+# \$1 = prompt file, \$2 = log file to write
+printf 'HOME=%s\nPWD=%s\n' "\$HOME" "\$PWD" >> "$record"
+expectation="\$(basename "\$(dirname "\$1")")"
+skill="\$(basename "\$(dirname "\$(dirname "\$1")")")"
+# Behave as the ideal plugin would: fire on should-fire cases, stay out of the
+# should-not-fire ones, so a clean run really is clean.
+if [ "\$expectation" = should-fire ]; then
+  printf '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"asmt:%s"}}]}}\n' "\$skill" > "\$2"
+else
+  printf '{"type":"result","subtype":"success"}\n' > "\$2"
+fi
+exit 0
+FAKE
+  chmod +x "$f"
+}
+
+fakedir="$(mktemp -d)"
+record="$fakedir/calls.txt"
+make_fake "$fakedir/attempt" "$record"
+
+before_status="$(git -C "$HERE/.." status --porcelain)"
+run_out="$(ASMT_TRIGGER_CMD="$fakedir/attempt" "$RUNNER" 2>&1)"
+run_code=$?
+
+if [ "$run_code" -eq 0 ]; then
+  ok "REQ-3.1: a full run with every case passing exits 0"
+else
+  bad "REQ-3.1: full fake run should exit 0, got $run_code: $run_out"
+fi
+
+# REQ-3.1: the HOME handed to every attempt is not the developer's, and holds
+# no plugin of its own — only the one under test, via --plugin-dir.
+homes="$(grep '^HOME=' "$record" | sed 's/^HOME=//' | sort -u)"
+if [ -n "$homes" ] && ! printf '%s\n' "$homes" | grep -qx "$HOME"; then
+  ok "REQ-3.1: attempts run with a HOME that is not the developer's"
+else
+  bad "REQ-3.1: an attempt ran with the real HOME ($homes)"
+fi
+
+leaked=0
+while IFS= read -r h; do
+  [ -n "$h" ] || continue
+  [ -e "$h/.claude/plugins" ] && leaked=1
+done <<< "$homes"
+if [ "$leaked" -eq 0 ]; then
+  ok "REQ-3.1: no other plugin is installed in the isolated HOME"
+else
+  bad "REQ-3.1: the isolated HOME contains an installed plugin tree"
+fi
+
+# REQ-3.2: and the working directory is a throwaway, never this repository.
+repo_root="$(cd "$HERE/.." && pwd)"
+pwds="$(grep '^PWD=' "$record" | sed 's/^PWD=//' | sort -u)"
+if [ -n "$pwds" ] && ! printf '%s\n' "$pwds" | grep -qx "$repo_root"; then
+  ok "REQ-3.2: attempts run outside the repository under test"
+else
+  bad "REQ-3.2: an attempt ran in the repository itself ($pwds)"
+fi
+
+# REQ-3.3: and the repository is untouched by the whole thing.
+after_status="$(git -C "$HERE/.." status --porcelain)"
+if [ "$after_status" = "$before_status" ]; then
+  ok "REQ-3.3: the repository is unchanged after a full run"
+else
+  bad "REQ-3.3: the repository changed during a run"
+fi
+
+rm -rf "$fakedir"
+
 [ "$fails" -eq 0 ] || printf '\n%s assertion(s) failed\n' "$fails"
 exit "$((fails > 0))"
