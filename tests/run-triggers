@@ -174,7 +174,10 @@ cmd_run() {
       0) printf 'ok   - %s %s %s\n' "$skill" "$expectation" "$name" ;;
       3) printf 'skip - %s %s %s (session could not authenticate)\n' "$skill" "$expectation" "$name"
          skipped=$((skipped + 1)) ;;
-      *) printf 'FAIL - %s %s %s\n' "$skill" "$expectation" "$name"
+      # Name the log on the failure line itself. A phrasing that did not fire
+      # is only diagnosable from the session it produced, and re-running to see
+      # it again costs another nested session.
+      *) printf 'FAIL - %s %s %s (log: %s)\n' "$skill" "$expectation" "$name" "$log_file"
          failed=$((failed + 1)) ;;
     esac
   done < <(cmd_list)

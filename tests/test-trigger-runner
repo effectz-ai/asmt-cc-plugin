@@ -29,6 +29,22 @@ log_with() {
 out=""; code=0
 judge() { out="$("$RUNNER" --judge "$1" "$2" "$3" 2>&1)"; code=$?; }
 
+# A two-case fixture set for the assertions about *behaviour* — retry, skip,
+# isolation, reporting — none of which depend on how many cases exist. Each
+# case builds and tears down a sandbox, and on this filesystem that dominates
+# the runtime: running the real sixteen five times over cost 25s in a suite the
+# gate executes on every verify.
+tiny_cases() {
+  local d
+  d="$(mktemp -d)"
+  mkdir -p "$d/spec/should-fire" "$d/spec/should-not-fire"
+  printf 'we need to spec something\n' > "$d/spec/should-fire/situational.txt"
+  printf 'unrelated request\n'         > "$d/spec/should-not-fire/unrelated.txt"
+  printf '%s' "$d"
+}
+TINY="$(tiny_cases)"
+TINY_N=2
+
 # REQ-1.1: a should-fire case passes only when the named skill was invoked.
 # The phrasings that decide whether it *does* fire are T-2's job; this is the
 # half that decides what the answer means.
@@ -204,7 +220,7 @@ record="$fakedir/calls.txt"
 make_fake "$fakedir/attempt" "$record"
 
 before_status="$(git -C "$HERE/.." status --porcelain)"
-run_out="$(ASMT_TRIGGER_CMD="$fakedir/attempt" "$RUNNER" 2>&1)"
+run_out="$(ASMT_TRIGGER_CASES="$TINY" ASMT_TRIGGER_CMD="$fakedir/attempt" "$RUNNER" 2>&1)"
 run_code=$?
 
 if [ "$run_code" -eq 0 ]; then
@@ -286,10 +302,9 @@ cat > "$fakedir2/attempt" <<'FAKE'
 #!/usr/bin/env bash
 expectation="$(basename "$(dirname "$1")")"
 skill="$(basename "$(dirname "$(dirname "$1")")")"
-# Behaves correctly everywhere except verify's situational case, which is the
-# single failure this run is built around.
-if [ "$expectation" = should-fire ] && \
-   ! { [ "$skill" = verify ] && [ "$(basename "$1")" = situational.txt ]; }; then
+# Behaves correctly everywhere except the situational case, which is the single
+# failure this run is built around.
+if [ "$expectation" = should-fire ] && [ "$(basename "$1")" != situational.txt ]; then
   printf '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"asmt:%s"}}]}}\n' "$skill" > "$2"
 else
   printf '{"type":"result","subtype":"success"}\n' > "$2"
@@ -298,7 +313,7 @@ exit 0
 FAKE
 chmod +x "$fakedir2/attempt"
 
-run_out="$(ASMT_TRIGGER_CMD="$fakedir2/attempt" "$RUNNER" 2>&1)"
+run_out="$(ASMT_TRIGGER_CASES="$TINY" ASMT_TRIGGER_CMD="$fakedir2/attempt" "$RUNNER" 2>&1)"
 run_code=$?
 
 if [ "$run_code" -ne 0 ]; then
@@ -308,14 +323,14 @@ else
 fi
 
 reported="$(printf '%s\n' "$run_out" | grep -c '^ok   -\|^FAIL -')"
-if [ "$reported" = "$on_disk" ]; then
+if [ "$reported" = "$TINY_N" ]; then
   ok "REQ-4.2: every case is reported ($reported)"
 else
-  bad "REQ-4.2: expected $on_disk cases reported, got $reported"
+  bad "REQ-4.2: expected $TINY_N cases reported, got $reported"
 fi
 
 case "$run_out" in
-  *"FAIL - verify should-fire situational"*)
+  *"FAIL - spec should-fire situational"*)
     ok "REQ-4.2: the failing case is named in the report" ;;
   *)
     bad "REQ-4.2: the report did not name the failing case: $run_out" ;;
@@ -330,7 +345,7 @@ rm -rf "$fakedir2"
 # absent.
 # A PATH with the usual tools but no claude on it — stripping PATH entirely
 # would take bash with it and prove nothing.
-skip_out="$(env -u ASMT_TRIGGER_CMD PATH=/usr/bin:/bin "$RUNNER" 2>&1)"
+skip_out="$(env -u ASMT_TRIGGER_CMD PATH=/usr/bin:/bin ASMT_TRIGGER_CASES="$TINY" "$RUNNER" 2>&1)"
 skip_code=$?
 if [ "$skip_code" -eq 0 ]; then
   ok "REQ-5.1: a machine with no claude on PATH exits 0"
@@ -353,7 +368,7 @@ exit 1
 FAKE
 chmod +x "$fakedir3/attempt"
 
-auth_out="$(ASMT_TRIGGER_CMD="$fakedir3/attempt" "$RUNNER" 2>&1)"
+auth_out="$(ASMT_TRIGGER_CASES="$TINY" ASMT_TRIGGER_CMD="$fakedir3/attempt" "$RUNNER" 2>&1)"
 auth_code=$?
 if [ "$auth_code" -eq 0 ]; then
   ok "REQ-5.2: an unauthenticated run exits 0 rather than failing"
@@ -361,10 +376,10 @@ else
   bad "REQ-5.2: auth failure should not fail the run, got $auth_code: $auth_out"
 fi
 skipped="$(printf '%s\n' "$auth_out" | grep -c '^skip -')"
-if [ "$skipped" = "$on_disk" ]; then
+if [ "$skipped" = "$TINY_N" ]; then
   ok "REQ-5.2: every case is reported as a skip ($skipped)"
 else
-  bad "REQ-5.2: expected $on_disk skips, got $skipped: $auth_out"
+  bad "REQ-5.2: expected $TINY_N skips, got $skipped: $auth_out"
 fi
 rm -rf "$fakedir3"
 
@@ -378,7 +393,7 @@ exit 139
 FAKE
 chmod +x "$fakedir4/attempt"
 
-crash_out="$(ASMT_TRIGGER_CMD="$fakedir4/attempt" "$RUNNER" 2>&1)"
+crash_out="$(ASMT_TRIGGER_CASES="$TINY" ASMT_TRIGGER_CMD="$fakedir4/attempt" "$RUNNER" 2>&1)"
 crash_code=$?
 if [ "$crash_code" -ne 0 ]; then
   ok "REQ-5.2: an attempt failing for another reason still fails the run"
@@ -386,6 +401,51 @@ else
   bad "REQ-5.2: a crashing attempt should fail the run, got exit 0"
 fi
 rm -rf "$fakedir4"
+
+# --- diagnosable failures --------------------------------------------------
+
+# REQ-6.1: a failing case names the log it produced. Without that, the only way
+# to find out why a phrasing did not fire is to spend the tokens again.
+fakedir5="$(mktemp -d)"
+cat > "$fakedir5/attempt" <<'FAKE'
+#!/usr/bin/env bash
+skill="$(basename "$(dirname "$(dirname "$1")")")"
+expectation="$(basename "$(dirname "$1")")"
+if [ "$expectation" = should-fire ] && [ "$(basename "$1")" != situational.txt ]; then
+  printf '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"asmt:%s"}}]}}\n' "$skill" > "$2"
+else
+  printf '{"type":"result","subtype":"success"}\n' > "$2"
+fi
+exit 0
+FAKE
+chmod +x "$fakedir5/attempt"
+
+diag_out="$(ASMT_TRIGGER_CASES="$TINY" ASMT_TRIGGER_CMD="$fakedir5/attempt" "$RUNNER" 2>&1)"
+
+fail_line="$(printf '%s\n' "$diag_out" | grep '^FAIL - spec should-fire situational' | head -n 1)"
+logpath="$(printf '%s' "$fail_line" | sed -n 's/.*log: \(.*\))$/\1/p')"
+
+if [ -n "$logpath" ]; then
+  ok "REQ-6.1: the failure names a log path"
+else
+  bad "REQ-6.1: failure line names no log path: $fail_line"
+fi
+
+if [ -n "$logpath" ] && [ -f "$logpath" ]; then
+  ok "REQ-6.1: the named log actually exists"
+else
+  bad "REQ-6.1: named log is missing: '$logpath'"
+fi
+
+if [ -n "$logpath" ] && [ -s "$logpath" ]; then
+  ok "REQ-6.1: the named log holds the captured session output"
+else
+  bad "REQ-6.1: named log is empty: '$logpath'"
+fi
+
+rm -rf "$fakedir5"
+
+rm -rf "$TINY"
 
 [ "$fails" -eq 0 ] || printf '\n%s assertion(s) failed\n' "$fails"
 exit "$((fails > 0))"
