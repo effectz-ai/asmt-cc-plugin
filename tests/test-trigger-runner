@@ -252,5 +252,75 @@ fi
 
 rm -rf "$fakedir"
 
+# --- outside the gate ------------------------------------------------------
+
+# REQ-4.1: run-all globs tests/test-*, so the runner staying out of that glob
+# is the mechanism that keeps nested sessions out of every verify.
+#
+# ponytail: static checks, not a shimmed PATH and a nested run-all. Proving
+# "run-all spawned no session" empirically costs a second full suite run on
+# every gate — the thing this change exists to avoid. The ceiling is a test-*
+# file that shells out to `claude` directly under some other name; the upgrade
+# path is the PATH shim, once there is a reason to think that happened.
+if ls "$HERE"/test-* 2>/dev/null | grep -q 'run-triggers'; then
+  bad "REQ-4.1: run-triggers is inside run-all's test-* glob"
+else
+  ok "REQ-4.1: run-triggers is outside run-all's test-* glob"
+fi
+
+unguarded=""
+for f in "$HERE"/test-*; do
+  grep -q 'run-triggers' "$f" 2>/dev/null || continue
+  grep -q 'ASMT_TRIGGER_CMD' "$f" 2>/dev/null || unguarded="$unguarded $(basename "$f")"
+done
+if [ -z "$unguarded" ]; then
+  ok "REQ-4.1: no gate test invokes the runner without the fake seam"
+else
+  bad "REQ-4.1: gate test(s) call run-triggers unguarded:$unguarded"
+fi
+
+# REQ-4.2: the runner's own command runs every case and fails the run when any
+# case fails.
+fakedir2="$(mktemp -d)"
+cat > "$fakedir2/attempt" <<'FAKE'
+#!/usr/bin/env bash
+expectation="$(basename "$(dirname "$1")")"
+skill="$(basename "$(dirname "$(dirname "$1")")")"
+# Behaves correctly everywhere except verify's situational case, which is the
+# single failure this run is built around.
+if [ "$expectation" = should-fire ] && \
+   ! { [ "$skill" = verify ] && [ "$(basename "$1")" = situational.txt ]; }; then
+  printf '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"asmt:%s"}}]}}\n' "$skill" > "$2"
+else
+  printf '{"type":"result","subtype":"success"}\n' > "$2"
+fi
+exit 0
+FAKE
+chmod +x "$fakedir2/attempt"
+
+run_out="$(ASMT_TRIGGER_CMD="$fakedir2/attempt" "$RUNNER" 2>&1)"
+run_code=$?
+
+if [ "$run_code" -ne 0 ]; then
+  ok "REQ-4.2: the runner exits non-zero when a case fails"
+else
+  bad "REQ-4.2: one failing case should fail the run, got exit 0"
+fi
+
+reported="$(printf '%s\n' "$run_out" | grep -c '^ok   -\|^FAIL -')"
+if [ "$reported" = "$on_disk" ]; then
+  ok "REQ-4.2: every case is reported ($reported)"
+else
+  bad "REQ-4.2: expected $on_disk cases reported, got $reported"
+fi
+
+case "$run_out" in
+  *"FAIL - verify should-fire situational"*)
+    ok "REQ-4.2: the failing case is named in the report" ;;
+  *)
+    bad "REQ-4.2: the report did not name the failing case: $run_out" ;;
+esac
+rm -rf "$fakedir2"
+
 [ "$fails" -eq 0 ] || printf '\n%s assertion(s) failed\n' "$fails"
 exit "$((fails > 0))"
