@@ -1,0 +1,1 @@
+Build the docker image and push it to the registry.

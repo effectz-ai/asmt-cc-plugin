@@ -114,5 +114,62 @@ case "$out" in
 esac
 rm -f "$log"
 
+# --- case discovery --------------------------------------------------------
+#
+# A case's location is its assertion: tests/triggers/<skill>/<expectation>/*.txt.
+# Adding a phrasing is adding a file, with nothing to register anywhere.
+
+cases="$("$RUNNER" --list 2>&1)"
+list_code=$?
+
+if [ "$list_code" -eq 0 ]; then
+  ok "REQ-1.1: --list succeeds"
+else
+  bad "REQ-1.1: --list should exit 0, got $list_code: $cases"
+fi
+
+# REQ-1.1 / REQ-1.2 / REQ-1.3: every entry point has a situational phrasing
+# that never names it, one that names it directly, and one that pressures
+# against process.
+for skill in spec plan build verify; do
+  for kind in situational named pressure; do
+    if printf '%s\n' "$cases" | grep -q "^${skill} should-fire .*/${kind}\.txt$"; then
+      ok "REQ-1.$(case $kind in situational) echo 1;; named) echo 2;; pressure) echo 3;; esac): ${skill} has a ${kind} should-fire case"
+    else
+      bad "REQ-1.x: no ${kind} should-fire case discovered for ${skill}"
+    fi
+  done
+done
+
+# REQ-2.1: every entry point has at least one case it must not claim.
+for skill in spec plan build verify; do
+  if printf '%s\n' "$cases" | grep -q "^${skill} should-not-fire "; then
+    ok "REQ-2.1: ${skill} has a should-not-fire case"
+  else
+    bad "REQ-2.1: no should-not-fire case discovered for ${skill}"
+  fi
+done
+
+# Discovery must not invent or drop cases: one line per fixture on disk.
+on_disk="$(find "$HERE/triggers" -name '*.txt' 2>/dev/null | wc -l | tr -d ' ')"
+listed="$(printf '%s\n' "$cases" | grep -c .)"
+if [ "$listed" = "$on_disk" ]; then
+  ok "REQ-1.1: every fixture on disk is discovered ($listed)"
+else
+  bad "REQ-1.1: $on_disk fixtures on disk but $listed discovered"
+fi
+
+# An unknown expectation directory is a typo that would otherwise silently
+# never run — refuse it rather than skip it.
+tmpdir="$(mktemp -d)"
+mkdir -p "$tmpdir/spec/shuold-fire"
+printf 'typo\n' > "$tmpdir/spec/shuold-fire/case.txt"
+if ASMT_TRIGGER_CASES="$tmpdir" "$RUNNER" --list >/dev/null 2>&1; then
+  bad "REQ-1.1: an unknown expectation directory should fail discovery"
+else
+  ok "REQ-1.1: an unknown expectation directory fails discovery"
+fi
+rm -rf "$tmpdir"
+
 [ "$fails" -eq 0 ] || printf '\n%s assertion(s) failed\n' "$fails"
 exit "$((fails > 0))"

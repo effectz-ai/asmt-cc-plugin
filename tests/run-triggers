@@ -63,7 +63,34 @@ cmd_judge() {
   return "$verdict"
 }
 
+HERE="$(cd "$(dirname "$0")" && pwd)"
+CASES="${ASMT_TRIGGER_CASES:-$HERE/triggers}"
+
+# Every case, one per line: `<skill> <expectation> <path>`.
+#
+# A case's location is its assertion — tests/triggers/<skill>/<expectation>/*.txt
+# — so adding a phrasing is adding a file, with nothing to register anywhere.
+# An expectation directory we do not recognise is a typo that would otherwise
+# be silently skipped forever, so it is an error rather than a shrug.
+cmd_list() {
+  local file rel skill expectation
+  [ -d "$CASES" ] || die "no case directory at $CASES"
+
+  while IFS= read -r file; do
+    rel="${file#"$CASES"/}"
+    skill="${rel%%/*}"
+    expectation="${rel#*/}"
+    expectation="${expectation%%/*}"
+    case "$expectation" in
+      should-fire|should-not-fire) ;;
+      *) die "unknown expectation directory '$expectation' in $file" ;;
+    esac
+    printf '%s %s %s\n' "$skill" "$expectation" "$file"
+  done < <(find "$CASES" -name '*.txt' | sort)
+}
+
 case "${1:-}" in
   --judge) shift; cmd_judge "$@" ;;
-  *)       die "usage: run-triggers --judge <log> <skill> <expectation>" ;;
+  --list)  shift; cmd_list "$@" ;;
+  *)       die "usage: run-triggers [--list|--judge <log> <skill> <expectation>]" ;;
 esac

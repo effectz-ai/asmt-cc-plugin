@@ -1,0 +1,1 @@
+asmt spec, please. The card is CU-8x2k, "rate limit the public API".
