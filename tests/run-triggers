@@ -129,28 +129,57 @@ run_case() {
   )
   rc=$?
   rm -rf "$sandbox"
-  [ "$rc" -eq 0 ] || return 2   # the attempt itself failed to run
+
+  if [ "$rc" -ne 0 ]; then
+    looks_unauthenticated "$log_file" && return 3   # skip: tells us nothing
+    return 2                                        # a real failure to run
+  fi
   cmd_judge "$log_file" "$skill" "$expectation" >/dev/null 2>&1
 }
 
+# Did this attempt fail because nobody is logged in, rather than because
+# anything about our descriptions is wrong?
+#
+# ponytail: a fixed list of phrases, matched case-insensitively. The CLI
+# promises nothing about its error text, so this is narrow on purpose — an
+# unrecognised failure stays a failure, because turning every non-zero exit
+# into a skip would let a broken runner report green. The ceiling is a
+# reworded auth error, which shows up as a confusing failure rather than a
+# silent pass; the upgrade path is a stable exit code from the CLI.
+looks_unauthenticated() {
+  grep -qiE 'invalid api key|/login|not logged in|authentication|unauthorized|401|credit balance' "$1" 2>/dev/null
+}
+
 cmd_run() {
-  local runs skill expectation prompt_file log_file failed=0 n=0
+  local runs skill expectation prompt_file log_file name rc failed=0 skipped=0 n=0
+
+  # A machine with no CLI cannot run these tests. That is not the same as tests
+  # that failed, and reporting it as red gives someone a job they cannot do.
+  if [ -z "${ASMT_TRIGGER_CMD:-}" ] && ! command -v claude >/dev/null 2>&1; then
+    printf 'skip - no claude executable on PATH; trigger cases not run\n'
+    return 0
+  fi
+
   runs="$(mktemp -d)"
   printf 'run-triggers: logs in %s\n\n' "$runs"
 
   while read -r skill expectation prompt_file; do
     [ -n "$skill" ] || continue
     n=$((n + 1))
-    log_file="$runs/${skill}-${expectation}-$(basename "$prompt_file" .txt).json"
-    if run_case "$skill" "$expectation" "$prompt_file" "$log_file"; then
-      printf 'ok   - %s %s %s\n' "$skill" "$expectation" "$(basename "$prompt_file" .txt)"
-    else
-      printf 'FAIL - %s %s %s\n' "$skill" "$expectation" "$(basename "$prompt_file" .txt)"
-      failed=$((failed + 1))
-    fi
+    name="$(basename "$prompt_file" .txt)"
+    log_file="$runs/${skill}-${expectation}-${name}.json"
+    run_case "$skill" "$expectation" "$prompt_file" "$log_file"
+    rc=$?
+    case "$rc" in
+      0) printf 'ok   - %s %s %s\n' "$skill" "$expectation" "$name" ;;
+      3) printf 'skip - %s %s %s (session could not authenticate)\n' "$skill" "$expectation" "$name"
+         skipped=$((skipped + 1)) ;;
+      *) printf 'FAIL - %s %s %s\n' "$skill" "$expectation" "$name"
+         failed=$((failed + 1)) ;;
+    esac
   done < <(cmd_list)
 
-  printf '\n%s case(s), %s failed\n' "$n" "$failed"
+  printf '\n%s case(s), %s failed, %s skipped\n' "$n" "$failed" "$skipped"
   [ "$failed" -eq 0 ]
 }
 

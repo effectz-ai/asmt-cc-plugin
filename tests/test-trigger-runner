@@ -322,5 +322,70 @@ case "$run_out" in
 esac
 rm -rf "$fakedir2"
 
+# --- absent tooling skips --------------------------------------------------
+
+# REQ-5.1: no claude on PATH is not a red suite. It is a machine that cannot
+# run these tests, which is a different thing from tests that failed — the same
+# distinction the attribution check already makes when the vendor clone is
+# absent.
+# A PATH with the usual tools but no claude on it — stripping PATH entirely
+# would take bash with it and prove nothing.
+skip_out="$(env -u ASMT_TRIGGER_CMD PATH=/usr/bin:/bin "$RUNNER" 2>&1)"
+skip_code=$?
+if [ "$skip_code" -eq 0 ]; then
+  ok "REQ-5.1: a machine with no claude on PATH exits 0"
+else
+  bad "REQ-5.1: missing claude should exit 0, got $skip_code: $skip_out"
+fi
+case "$skip_out" in
+  *skip*claude*|*claude*skip*) ok "REQ-5.1: the skip names the missing tool" ;;
+  *) bad "REQ-5.1: skip did not name claude: $skip_out" ;;
+esac
+
+# REQ-5.2: a session that cannot authenticate has not told us anything about
+# our descriptions, so it is a skip too — not a failure someone will waste an
+# afternoon on.
+fakedir3="$(mktemp -d)"
+cat > "$fakedir3/attempt" <<'FAKE'
+#!/usr/bin/env bash
+printf 'Invalid API key · Please run /login\n' > "$2"
+exit 1
+FAKE
+chmod +x "$fakedir3/attempt"
+
+auth_out="$(ASMT_TRIGGER_CMD="$fakedir3/attempt" "$RUNNER" 2>&1)"
+auth_code=$?
+if [ "$auth_code" -eq 0 ]; then
+  ok "REQ-5.2: an unauthenticated run exits 0 rather than failing"
+else
+  bad "REQ-5.2: auth failure should not fail the run, got $auth_code: $auth_out"
+fi
+skipped="$(printf '%s\n' "$auth_out" | grep -c '^skip -')"
+if [ "$skipped" = "$on_disk" ]; then
+  ok "REQ-5.2: every case is reported as a skip ($skipped)"
+else
+  bad "REQ-5.2: expected $on_disk skips, got $skipped: $auth_out"
+fi
+rm -rf "$fakedir3"
+
+# An attempt that fails for some *other* reason is a real failure — skipping
+# on any non-zero exit would turn a broken runner into a green suite.
+fakedir4="$(mktemp -d)"
+cat > "$fakedir4/attempt" <<'FAKE'
+#!/usr/bin/env bash
+printf 'segfault, core dumped\n' > "$2"
+exit 139
+FAKE
+chmod +x "$fakedir4/attempt"
+
+crash_out="$(ASMT_TRIGGER_CMD="$fakedir4/attempt" "$RUNNER" 2>&1)"
+crash_code=$?
+if [ "$crash_code" -ne 0 ]; then
+  ok "REQ-5.2: an attempt failing for another reason still fails the run"
+else
+  bad "REQ-5.2: a crashing attempt should fail the run, got exit 0"
+fi
+rm -rf "$fakedir4"
+
 [ "$fails" -eq 0 ] || printf '\n%s assertion(s) failed\n' "$fails"
 exit "$((fails > 0))"
