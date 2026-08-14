@@ -445,6 +445,112 @@ fi
 
 rm -rf "$fakedir5"
 
+# --- flakiness -------------------------------------------------------------
+#
+# Model behaviour is not deterministic: the same prompt can fail once and pass
+# on the next run. Retrying keeps that from reading as a broken description —
+# and reporting the retry keeps a weak description from hiding behind one.
+
+# REQ-7.3: a case that passes first time spawns exactly one session. Retrying
+# every case regardless would multiply the cost of the whole suite to learn
+# nothing about the cases that already work.
+fakedir6="$(mktemp -d)"
+count6="$fakedir6/calls"
+: > "$count6"
+cat > "$fakedir6/attempt" <<FAKE
+#!/usr/bin/env bash
+printf 'x\n' >> "$count6"
+expectation="\$(basename "\$(dirname "\$1")")"
+skill="\$(basename "\$(dirname "\$(dirname "\$1")")")"
+if [ "\$expectation" = should-fire ]; then
+  printf '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"asmt:%s"}}]}}\n' "\$skill" > "\$2"
+else
+  printf '{"type":"result","subtype":"success"}\n' > "\$2"
+fi
+exit 0
+FAKE
+chmod +x "$fakedir6/attempt"
+
+clean_out="$(ASMT_TRIGGER_CASES="$TINY" ASMT_TRIGGER_CMD="$fakedir6/attempt" "$RUNNER" 2>&1)"
+attempts6="$(grep -c . "$count6")"
+if [ "$attempts6" = "$TINY_N" ]; then
+  ok "REQ-7.3: a clean run spawns exactly one session per case ($attempts6)"
+else
+  bad "REQ-7.3: expected $TINY_N attempts on a clean run, got $attempts6"
+fi
+case "$clean_out" in
+  *flaky*) bad "REQ-7.3: a clean run should not mention flaky: $clean_out" ;;
+  *)       ok "REQ-7.3: a clean run reports nothing as flaky" ;;
+esac
+rm -rf "$fakedir6"
+
+# REQ-7.1: fails once, passes on the retry — the case passes, the suite passes,
+# and the report says it took two goes.
+fakedir7="$(mktemp -d)"
+count7="$fakedir7/calls"
+: > "$count7"
+cat > "$fakedir7/attempt" <<FAKE
+#!/usr/bin/env bash
+printf 'x\n' >> "$count7"
+n=\$(grep -c . "$count7")
+expectation="\$(basename "\$(dirname "\$1")")"
+skill="\$(basename "\$(dirname "\$(dirname "\$1")")")"
+# The very first attempt of the run misbehaves; everything after it is correct.
+if [ "\$expectation" = should-fire ] && [ "\$n" -gt 1 ]; then
+  printf '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"asmt:%s"}}]}}\n' "\$skill" > "\$2"
+else
+  printf '{"type":"result","subtype":"success"}\n' > "\$2"
+fi
+exit 0
+FAKE
+chmod +x "$fakedir7/attempt"
+
+flaky_out="$(ASMT_TRIGGER_CASES="$TINY" ASMT_TRIGGER_CMD="$fakedir7/attempt" "$RUNNER" 2>&1)"
+flaky_code=$?
+if [ "$flaky_code" -eq 0 ]; then
+  ok "REQ-7.1: a case that passes on retry does not fail the suite"
+else
+  bad "REQ-7.1: retry-pass should not fail the suite, got $flaky_code: $flaky_out"
+fi
+case "$flaky_out" in
+  *flaky*) ok "REQ-7.1: the retried case is reported as flaky" ;;
+  *)       bad "REQ-7.1: no flaky report: $flaky_out" ;;
+esac
+case "$flaky_out" in
+  *"2 attempt"*) ok "REQ-7.1: the report names how many attempts it took" ;;
+  *)             bad "REQ-7.1: attempt count not reported: $flaky_out" ;;
+esac
+rm -rf "$fakedir7"
+
+# REQ-7.2: never passes within budget — a real failure, and the suite says so.
+fakedir8="$(mktemp -d)"
+count8="$fakedir8/calls"
+: > "$count8"
+cat > "$fakedir8/attempt" <<FAKE
+#!/usr/bin/env bash
+printf 'x\n' >> "$count8"
+printf '{"type":"result","subtype":"success"}\n' > "\$2"
+exit 0
+FAKE
+chmod +x "$fakedir8/attempt"
+
+never_out="$(ASMT_TRIGGER_CASES="$TINY" ASMT_TRIGGER_CMD="$fakedir8/attempt" "$RUNNER" 2>&1)"
+never_code=$?
+if [ "$never_code" -ne 0 ]; then
+  ok "REQ-7.2: a case that never passes fails the suite"
+else
+  bad "REQ-7.2: a never-passing case should fail the suite, got exit 0"
+fi
+# The should-fire case burns its whole budget; the should-not-fire case passes
+# first time, so the total is budget + 1 rather than budget x cases.
+attempts8="$(grep -c . "$count8")"
+if [ "$attempts8" -gt "$TINY_N" ] && [ "$attempts8" -le 10 ]; then
+  ok "REQ-7.2: retries are bounded by a budget ($attempts8 attempts)"
+else
+  bad "REQ-7.2: attempts not bounded sensibly, got $attempts8"
+fi
+rm -rf "$fakedir8"
+
 rm -rf "$TINY"
 
 [ "$fails" -eq 0 ] || printf '\n%s assertion(s) failed\n' "$fails"

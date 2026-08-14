@@ -10,6 +10,8 @@
 # really runs rather than a copy of it.
 set -uo pipefail
 
+ATTEMPTS="${ASMT_TRIGGER_ATTEMPTS:-3}"
+
 die() { printf 'run-triggers: %s\n' "$*" >&2; exit 1; }
 
 # Skills invoked in a captured stream-json session log, one per line, in the
@@ -151,7 +153,7 @@ looks_unauthenticated() {
 }
 
 cmd_run() {
-  local runs skill expectation prompt_file log_file name rc failed=0 skipped=0 n=0
+  local runs skill expectation prompt_file log_file name rc tries failed=0 skipped=0 flaky=0 n=0
 
   # A machine with no CLI cannot run these tests. That is not the same as tests
   # that failed, and reporting it as red gives someone a job they cannot do.
@@ -167,11 +169,32 @@ cmd_run() {
     [ -n "$skill" ] || continue
     n=$((n + 1))
     name="$(basename "$prompt_file" .txt)"
-    log_file="$runs/${skill}-${expectation}-${name}.json"
-    run_case "$skill" "$expectation" "$prompt_file" "$log_file"
-    rc=$?
+
+    # Retry only on failure. The same prompt can fail once and pass the next
+    # time, so one bad attempt is not evidence about a description — but a case
+    # that needs three goes is a weak description, which is why the attempt
+    # count is reported rather than swallowed. A first-attempt pass costs
+    # exactly one session; retrying everything would multiply the suite's cost
+    # to learn nothing about the cases that already work.
+    tries=0
+    while :; do
+      tries=$((tries + 1))
+      log_file="$runs/${skill}-${expectation}-${name}.attempt-${tries}.json"
+      run_case "$skill" "$expectation" "$prompt_file" "$log_file"
+      rc=$?
+      [ "$rc" -eq 0 ] && break
+      [ "$rc" -eq 3 ] && break              # unauthenticated: retrying cannot help
+      [ "$tries" -ge "$ATTEMPTS" ] && break
+    done
+
     case "$rc" in
-      0) printf 'ok   - %s %s %s\n' "$skill" "$expectation" "$name" ;;
+      0) if [ "$tries" -gt 1 ]; then
+           printf 'flaky- %s %s %s (passed on %s attempts)\n' \
+             "$skill" "$expectation" "$name" "$tries"
+           flaky=$((flaky + 1))
+         else
+           printf 'ok   - %s %s %s\n' "$skill" "$expectation" "$name"
+         fi ;;
       3) printf 'skip - %s %s %s (session could not authenticate)\n' "$skill" "$expectation" "$name"
          skipped=$((skipped + 1)) ;;
       # Name the log on the failure line itself. A phrasing that did not fire
