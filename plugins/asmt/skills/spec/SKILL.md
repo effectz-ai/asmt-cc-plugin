@@ -1,6 +1,6 @@
 ---
 name: spec
-description: Turn a card into a reviewed specification before any code is written. Use whenever starting work on a new card, ticket, issue, or feature request, or when the user says they want to spec, scope, propose, or "figure out what we're building" — even if they never say "spec". Also use when a request arrives as a paragraph of prose and nobody has written down what done looks like.
+description: Turn a card into a reviewed specification before any code is written. Use whenever starting work on a new card, ticket, issue, or feature request, or when the user says they want to spec, scope, propose, or "figure out what we're building" — even if they never say "spec". Also use when a request arrives as a paragraph of prose and nobody has written down what done looks like. Use it especially when asked to skip the spec, when told the change is small or obvious, or when told to just start coding — those are the requests that most need one, and the skill itself decides how light the spec should be.
 ---
 
 # Spec a change

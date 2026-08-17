@@ -12,6 +12,10 @@ set -uo pipefail
 
 ATTEMPTS="${ASMT_TRIGGER_ATTEMPTS:-3}"
 
+# Captured before any sandbox overrides HOME, so the credential copy below can
+# still find the real profile.
+REAL_HOME="${USERPROFILE:-$HOME}"
+
 die() { printf 'run-triggers: %s\n' "$*" >&2; exit 1; }
 
 # Skills invoked in a captured stream-json session log, one per line, in the
@@ -22,7 +26,7 @@ die() { printf 'run-triggers: %s\n' "$*" >&2; exit 1; }
 # harness that starts pretty-printing stream-json across lines; the fix then is
 # a real parser, not a cleverer regex.
 skills_fired() {
-  grep -o '"skill":"[^"]*"' "$1" 2>/dev/null \
+  grep -ao '"skill":"[^"]*"' "$1" 2>/dev/null \
     | sed -e 's/^"skill":"//' -e 's/"$//' \
     | sort -u
 }
@@ -99,18 +103,79 @@ PLUGIN_DIR="$(cd "$HERE/../plugins/asmt" && pwd)"
 # the offline tests use — a fake can record the environment it was handed and
 # emit a canned log, so isolation, retry and skip behaviour are all testable
 # without spending a token.
+# Both branches take stdin from /dev/null. The caller drives these from a
+# `while read` loop, and a nested session inherits that stdin and drains it —
+# which silently ate every case after the first until a real run exposed it.
 attempt() {
   local prompt_file="$1" log_file="$2"
   if [ -n "${ASMT_TRIGGER_CMD:-}" ]; then
-    "$ASMT_TRIGGER_CMD" "$prompt_file" "$log_file"
+    "$ASMT_TRIGGER_CMD" "$prompt_file" "$log_file" < /dev/null
     return $?
   fi
+  # --verbose is not optional here: --print with stream-json is rejected
+  # without it.
   timeout 300 claude -p "$(cat "$prompt_file")" \
     --plugin-dir "$PLUGIN_DIR" \
     --dangerously-skip-permissions \
     --max-turns 3 \
     --output-format stream-json \
+    --verbose \
+    < /dev/null \
     > "$log_file" 2>&1
+}
+
+# The throwaway project a case runs against.
+#
+# An empty directory is not a realistic target, and pretending otherwise
+# produced false failures: asked to spec a rate limiter in a directory holding
+# nothing at all, a session sensibly asks what the project even is rather than
+# invoking anything. So the sandbox gets the minimum that makes the prompts
+# coherent — an ASMT config, and one change whose spec is signed off but not
+# yet planned. That state is deliberate: it is the point where /asmt:plan is
+# the right next move and /asmt:build is not.
+seed_project() {
+  local p="$1"
+  mkdir -p "$p/.asmt" "$p/specs/current" "$p/specs/changes/caching"
+
+  cat > "$p/.asmt/config.yml" <<'YML'
+version: 1
+modes:
+  artifacts: living
+  loop: tdd
+  topology: sequential
+default_size_class: standard
+verify:
+  command: "npm test"
+paths:
+  changes: "specs/changes"
+  living:  "specs/current"
+YML
+
+  cat > "$p/specs/changes/caching/proposal.md" <<'MD'
+# Proposal: response caching
+
+Repeated identical reads hit the database every time. Cache them.
+
+## What this explicitly does not do
+
+No cache invalidation on write — a later change.
+MD
+
+  cat > "$p/specs/changes/caching/spec.md" <<'MD'
+Signed off: tester, 2026-08-07
+
+# Spec: response caching
+
+## ADDED REQ-1: Identical reads are served from cache
+
+### REQ-1.1
+
+Given a read served once, when the same read arrives again within the TTL,
+then it is answered from cache without touching the database.
+MD
+
+  git -C "$p" init -q 2>/dev/null || true
+  git -C "$p" config core.autocrlf false 2>/dev/null || true
 }
 
 # Runs one case in a sandbox and returns the judge's verdict.
@@ -124,17 +189,39 @@ run_case() {
   local skill="$1" expectation="$2" prompt_file="$3" log_file="$4"
   local sandbox rc
   sandbox="$(mktemp -d)"
-  mkdir -p "$sandbox/home" "$sandbox/project"
+  mkdir -p "$sandbox/home/.claude" "$sandbox/project"
+  seed_project "$sandbox/project"
+
+  # Isolation and authentication pull in opposite directions: credentials live
+  # in the same profile directory the other plugins are installed in, so a
+  # fully empty HOME produced sixteen "Not logged in" skips. Copy the one file
+  # that carries credentials and nothing else — the plugin roster, settings and
+  # history stay out, which is what the isolation is actually for.
+  if [ -z "${ASMT_TRIGGER_CMD:-}" ] && [ -f "$REAL_HOME/.claude/.credentials.json" ]; then
+    cp "$REAL_HOME/.claude/.credentials.json" "$sandbox/home/.claude/" 2>/dev/null || true
+  fi
   (
     cd "$sandbox/project" || exit 1
-    HOME="$sandbox/home" attempt "$prompt_file" "$log_file"
+    # USERPROFILE as well as HOME: on Windows the CLI resolves its config from
+    # USERPROFILE, so setting HOME alone left every other installed plugin
+    # loaded in a session that was supposed to be isolated.
+    HOME="$sandbox/home" USERPROFILE="$sandbox/home" \
+      attempt "$prompt_file" "$log_file"
   )
   rc=$?
   rm -rf "$sandbox"
 
-  if [ "$rc" -ne 0 ]; then
-    looks_unauthenticated "$log_file" && return 3   # skip: tells us nothing
-    return 2                                        # a real failure to run
+  # A non-zero exit does not mean the question went unanswered. A session that
+  # hits --max-turns exits non-zero having already invoked the skill, and
+  # discarding that log called a firing skill a failure. So: judge whatever was
+  # captured, and only treat the attempt as unusable when it produced nothing.
+  if [ ! -s "$log_file" ]; then
+    [ "$rc" -eq 0 ] && return 2
+    looks_unauthenticated "$log_file" && return 3
+    return 2
+  fi
+  if [ "$rc" -ne 0 ] && looks_unauthenticated "$log_file"; then
+    return 3                                        # skip: tells us nothing
   fi
   cmd_judge "$log_file" "$skill" "$expectation" >/dev/null 2>&1
 }
@@ -148,8 +235,15 @@ run_case() {
 # into a skip would let a broken runner report green. The ceiling is a
 # reworded auth error, which shows up as a confusing failure rather than a
 # silent pass; the upgrade path is a stable exit code from the CLI.
+# -a because these logs contain control characters and grep otherwise decides
+# they are binary — at which point -q still matches but -o prints nothing, so
+# the same file both "contains an auth error" and "lists no skills". That
+# combination produced false skips and false failures in the first real run.
+#
+# The phrase list is narrower than it was: 'authentication' and '401' appear in
+# ordinary session chatter, and matching them turned working cases into skips.
 looks_unauthenticated() {
-  grep -qiE 'invalid api key|/login|not logged in|authentication|unauthorized|401|credit balance' "$1" 2>/dev/null
+  grep -qaiE 'invalid api key|please run /login|not logged in|credit balance is too low|usage limit|spend limit' "$1" 2>/dev/null
 }
 
 cmd_run() {

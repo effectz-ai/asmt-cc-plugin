@@ -364,3 +364,99 @@ to match tests that already exist, inverts spec-grammar's whole premise
 is that the rule applies going forward, from `quiet-fixture-crlf` on, and
 the three older suites are grandfathered until whatever future change
 actually touches that code gives it a real spec on its own terms.
+
+---
+
+## Retired: under-triggering is testable after all
+
+*Added 2026-08-17, from the `skill-triggers` change.*
+
+The limitation recorded above — that this run's methodology could not observe
+under-triggering — was true of the method and wrong about the world. Nested
+`claude -p` sessions with `--output-format stream-json` report every `Skill`
+invocation, so "did this phrasing fire this skill?" has a mechanical answer.
+`tests/run-triggers` now asks it, sixteen cases, four entry points, both
+directions.
+
+The first real run answered the original question. All four **pressure** cases
+failed — every phrasing that pushes back on process — while every situational,
+named, and negative case passed. The descriptions had been written for a
+cooperative user. Under `"the tests passed when I ran them, no need to check
+again"`, the verify session reasoned correctly that it could not confirm the
+claim, said so at length, and never ran the gate.
+
+Each description now names its own pressure as a trigger rather than as
+something to resist. All sixteen cases pass.
+
+### What the harness got wrong before it got anything right
+
+Three bugs sat between the first run and a trustworthy answer, none of which
+the offline tests could have caught, because a fake that behaves politely
+hides exactly the integration failures worth finding:
+
+- **`claude` drains stdin.** The runner drives cases from a `while read` loop,
+  and the nested session ate the remaining lines. Fifteen of sixteen cases
+  silently never ran, and the suite reported success on the one that did.
+- **`--print` with `stream-json` is rejected without `--verbose`.** Every
+  attempt failed instantly; the run was fast because nothing happened.
+- **`grep` decided the logs were binary.** `-q` still matched while `-o`
+  printed nothing, so one file could simultaneously "contain an auth error"
+  and "list no skills" — producing both false skips and false failures.
+
+And two design errors that only a real session could expose:
+
+- **A non-zero exit was read as "no answer".** A session that hits
+  `--max-turns` exits non-zero *having already invoked the skill*. Discarding
+  that log called a firing skill a failure. Judge the capture, whatever the
+  exit code; only an empty capture is unusable.
+- **`HOME` does not isolate on Windows.** The CLI resolves its profile from
+  `USERPROFILE`, so sessions meant to see only `asmt` had `caveman`,
+  `ponytail`, and `superpowers` loaded too. The test asserted the env var was
+  set, not that it had the intended effect — it passed while the property it
+  named was false. That is the sharpest lesson here: **assert the outcome, not
+  the mechanism.**
+
+Setting `USERPROFILE` then broke authentication, because credentials live in
+the same profile the other plugins are installed in. Isolation and
+authentication genuinely pull against each other, and the spec did not
+anticipate it. The resolution copies exactly one file — `.credentials.json` —
+into the sandbox and nothing else.
+
+The skip design paid for itself here: sixteen `could not authenticate` skips
+said "this run learned nothing" instead of sixteen red cases sending someone
+off to rewrite descriptions that were never the problem.
+
+### An empty sandbox is not a realistic target
+
+After the descriptions were strengthened, `spec` and `plan` still failed under
+pressure — and both were right to. The sandbox project was empty, so a session
+asked to spec a rate limiter in a directory containing nothing sensibly asked
+what the project was rather than invoking anything. The fixture was lying, not
+the description. The sandbox now seeds an ASMT config and one change whose spec
+is signed off but not yet planned: the state where `/asmt:plan` is the correct
+next move and `/asmt:build` is not.
+
+Two failures wearing the same red, with opposite causes. The exit code alone
+would have sent the next change to rewrite two descriptions that were already
+fine.
+
+### What the run still says about us
+
+Two cases are flaky, and the report says so rather than hiding it behind a
+pass:
+
+    flaky- build should-fire situational (passed on 2 attempts)
+    flaky- spec  should-fire pressure    (passed on 3 attempts)
+
+`spec` under pressure needing three attempts is the weakest description in the
+plugin. It passes, so it does not fail the suite — but it is the first thing to
+strengthen, and without the attempt count it would have been an invisible
+green.
+
+### Still not tested
+
+Descriptions are tested in isolation, against a HOME with no other plugin
+installed. Whether ours *win* when competing with every skill on a real
+developer's machine is a different question, deliberately out of scope: results
+would move whenever anyone installed a plugin, so red would stop meaning
+anything about our code.
