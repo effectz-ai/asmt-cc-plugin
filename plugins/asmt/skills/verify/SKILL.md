@@ -1,6 +1,6 @@
 ---
 name: verify
-description: Run the repository's verification gate and produce a receipt for the current commit. Use whenever the user wants to verify, gate, check, or prove that the current commit passes lint, types, and tests — including phrasings that never say "verify", like "run the checks", "is this green?", "did that break anything?", or "can I open the PR yet?". Also use before any attempt to push or open a pull request.
+description: Run the repository's verification gate and produce a receipt for the current commit. Use whenever the user wants to verify, gate, check, or prove that the current commit passes lint, types, and tests — including phrasings that never say "verify", like "run the checks", "is this green?", "did that break anything?", or "can I open the PR yet?". Also use before any attempt to push or open a pull request. Use it especially when someone reports that the tests already passed, says a re-run is unnecessary, or asks you to confirm the work is safe to ship — a claim about a previous run is the reason this exists, not a reason to skip it.
 ---
 
 # Verify

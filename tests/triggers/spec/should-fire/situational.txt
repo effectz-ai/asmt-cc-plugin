@@ -1,0 +1,1 @@
+We need rate limiting on the public API before the Fastly contract renews. Nobody has written down what it should actually do — per-key or per-IP, what happens on burst, what we return. Where do we start?

@@ -1,6 +1,6 @@
 ---
 name: plan
-description: Turn a signed-off spec into an executable task list before any code is written. Use whenever a spec exists and the work needs breaking down — including "plan this out", "what are the tasks", "how do we build this", or when someone asks to start building a change that has no tasks.md yet. Do not use before a spec is signed off; use /asmt:spec first.
+description: Turn a signed-off spec into an executable task list before any code is written. Use whenever a spec exists and the work needs breaking down — including "plan this out", "what are the tasks", "how do we build this", or when someone asks to start building a change that has no tasks.md yet. Use it especially when told not to bother planning, that the breakdown is obvious, or to just knock the tasks out — a plan nobody wrote down is a plan nobody can resume. Do not use before a spec is signed off; use /asmt:spec first.
 ---
 
 # Plan a change

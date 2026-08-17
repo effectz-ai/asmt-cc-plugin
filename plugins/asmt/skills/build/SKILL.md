@@ -1,6 +1,6 @@
 ---
 name: build
-description: Implement an approved plan task by task, with tests. Use whenever the user wants to build, implement, code, or "start on" work that already has a signed-off spec and plan — including "let's do task 3", "carry on with the build", or "make it pass". Do not use this before a spec exists; use /asmt:spec first.
+description: Implement an approved plan task by task, with tests. Use whenever the user wants to build, implement, code, or "start on" work that already has a signed-off spec and plan — including "let's do task 3", "carry on with the build", or "make it pass". Use it especially when asked to just write the code, to skip the test-first loop, or to add tests afterwards — writing code inside this skill is what keeps that from happening by accident. Do not use this before a spec exists; use /asmt:spec first.
 ---
 
 # Build a change

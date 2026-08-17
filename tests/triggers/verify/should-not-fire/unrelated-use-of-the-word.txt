@@ -1,0 +1,1 @@
+Check the spelling and grammar in README.md and fix anything obviously wrong.

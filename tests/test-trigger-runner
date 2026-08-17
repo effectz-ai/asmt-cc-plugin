@@ -1,0 +1,557 @@
+#!/usr/bin/env bash
+# Offline unit tests for tests/run-triggers. Spawns no nested session and costs
+# nothing — that is why this file is named test-* and the runner is not.
+# See specs/changes/skill-triggers/spec.md.
+set -uo pipefail
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+RUNNER="$HERE/run-triggers"
+
+fails=0
+ok()  { printf 'ok   - %s\n' "$1"; }
+bad() { printf 'FAIL - %s\n' "$1"; fails=$((fails + 1)); }
+
+# A captured session log holding one Skill invocation per named skill, in the
+# shape `claude -p --output-format stream-json` emits.
+log_with() {
+  local f
+  f="$(mktemp)"
+  {
+    printf '{"type":"system","subtype":"init","session_id":"t"}\n'
+    for s in "$@"; do
+      printf '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"%s"}}]}}\n' "$s"
+    done
+    printf '{"type":"result","subtype":"success"}\n'
+  } > "$f"
+  printf '%s' "$f"
+}
+
+out=""; code=0
+judge() { out="$("$RUNNER" --judge "$1" "$2" "$3" 2>&1)"; code=$?; }
+
+# A two-case fixture set for the assertions about *behaviour* — retry, skip,
+# isolation, reporting — none of which depend on how many cases exist. Each
+# case builds and tears down a sandbox, and on this filesystem that dominates
+# the runtime: running the real sixteen five times over cost 25s in a suite the
+# gate executes on every verify.
+tiny_cases() {
+  local d
+  d="$(mktemp -d)"
+  mkdir -p "$d/spec/should-fire" "$d/spec/should-not-fire"
+  printf 'we need to spec something\n' > "$d/spec/should-fire/situational.txt"
+  printf 'unrelated request\n'         > "$d/spec/should-not-fire/unrelated.txt"
+  printf '%s' "$d"
+}
+TINY="$(tiny_cases)"
+TINY_N=2
+
+# REQ-1.1: a should-fire case passes only when the named skill was invoked.
+# The phrasings that decide whether it *does* fire are T-2's job; this is the
+# half that decides what the answer means.
+log="$(log_with 'asmt:spec')"
+judge "$log" spec should-fire
+if [ "$code" -eq 0 ]; then
+  ok "REQ-1.1: should-fire passes when the skill was invoked"
+else
+  bad "REQ-1.1: should-fire should pass when the skill fired, got exit $code: $out"
+fi
+rm -f "$log"
+
+log="$(log_with)"
+judge "$log" spec should-fire
+if [ "$code" -ne 0 ]; then
+  ok "REQ-1.1: should-fire fails when no skill was invoked"
+else
+  bad "REQ-1.1: should-fire should fail when nothing fired, got exit 0"
+fi
+rm -f "$log"
+
+# The plugin namespace prefix is optional — a skill invoked as `spec` and one
+# invoked as `asmt:spec` are the same skill firing.
+log="$(log_with 'spec')"
+judge "$log" spec should-fire
+if [ "$code" -eq 0 ]; then
+  ok "REQ-1.1: an unprefixed skill name counts as the same skill"
+else
+  bad "REQ-1.1: bare 'spec' should match skill 'spec', got exit $code: $out"
+fi
+rm -f "$log"
+
+# A skill whose name merely contains ours is a different skill. Same
+# whole-token discipline the REQ id matching uses, for the same reason.
+log="$(log_with 'asmt:spec-grammar')"
+judge "$log" spec should-fire
+if [ "$code" -ne 0 ]; then
+  ok "REQ-1.1: spec-grammar firing does not count as spec firing"
+else
+  bad "REQ-1.1: 'spec-grammar' should not satisfy 'spec', got exit 0"
+fi
+rm -f "$log"
+
+# REQ-2.1 semantics: a should-not-fire case fails when the skill did fire.
+log="$(log_with 'asmt:spec')"
+judge "$log" spec should-not-fire
+if [ "$code" -ne 0 ]; then
+  ok "REQ-2.1: should-not-fire fails when the skill was invoked"
+else
+  bad "REQ-2.1: should-not-fire should fail when the skill fired, got exit 0"
+fi
+rm -f "$log"
+
+# REQ-2.2: a should-not-fire case passes even when some *other* skill fired.
+# The assertion is about the named skill only — otherwise every negative case
+# would also be asserting that the model did nothing at all, which is not what
+# is being tested.
+log="$(log_with 'asmt:build' 'asmt:verify')"
+judge "$log" spec should-not-fire
+if [ "$code" -eq 0 ]; then
+  ok "REQ-2.2: should-not-fire passes when a different skill fired"
+else
+  bad "REQ-2.2: another skill firing should not fail a should-not-fire case: $out"
+fi
+rm -f "$log"
+
+# REQ-6.2: the report says what actually fired, so a failure can be read
+# without opening the log.
+log="$(log_with 'asmt:build' 'asmt:verify')"
+judge "$log" spec should-fire
+case "$out" in
+  *asmt:build*) ok "REQ-6.2: the report lists the skills that fired" ;;
+  *)            bad "REQ-6.2: report did not list asmt:build: $out" ;;
+esac
+rm -f "$log"
+
+# REQ-6.2: and says so plainly when nothing fired at all.
+log="$(log_with)"
+judge "$log" spec should-fire
+case "$out" in
+  *none*) ok "REQ-6.2: the report says none when nothing fired" ;;
+  *)      bad "REQ-6.2: report did not say none: $out" ;;
+esac
+rm -f "$log"
+
+# --- case discovery --------------------------------------------------------
+#
+# A case's location is its assertion: tests/triggers/<skill>/<expectation>/*.txt.
+# Adding a phrasing is adding a file, with nothing to register anywhere.
+
+cases="$("$RUNNER" --list 2>&1)"
+list_code=$?
+
+if [ "$list_code" -eq 0 ]; then
+  ok "REQ-1.1: --list succeeds"
+else
+  bad "REQ-1.1: --list should exit 0, got $list_code: $cases"
+fi
+
+# REQ-1.1 / REQ-1.2 / REQ-1.3: every entry point has a situational phrasing
+# that never names it, one that names it directly, and one that pressures
+# against process.
+for skill in spec plan build verify; do
+  for kind in situational named pressure; do
+    if printf '%s\n' "$cases" | grep -q "^${skill} should-fire .*/${kind}\.txt$"; then
+      ok "REQ-1.$(case $kind in situational) echo 1;; named) echo 2;; pressure) echo 3;; esac): ${skill} has a ${kind} should-fire case"
+    else
+      bad "REQ-1.x: no ${kind} should-fire case discovered for ${skill}"
+    fi
+  done
+done
+
+# REQ-2.1: every entry point has at least one case it must not claim.
+for skill in spec plan build verify; do
+  if printf '%s\n' "$cases" | grep -q "^${skill} should-not-fire "; then
+    ok "REQ-2.1: ${skill} has a should-not-fire case"
+  else
+    bad "REQ-2.1: no should-not-fire case discovered for ${skill}"
+  fi
+done
+
+# Discovery must not invent or drop cases: one line per fixture on disk.
+on_disk="$(find "$HERE/triggers" -name '*.txt' 2>/dev/null | wc -l | tr -d ' ')"
+listed="$(printf '%s\n' "$cases" | grep -c .)"
+if [ "$listed" = "$on_disk" ]; then
+  ok "REQ-1.1: every fixture on disk is discovered ($listed)"
+else
+  bad "REQ-1.1: $on_disk fixtures on disk but $listed discovered"
+fi
+
+# An unknown expectation directory is a typo that would otherwise silently
+# never run — refuse it rather than skip it.
+tmpdir="$(mktemp -d)"
+mkdir -p "$tmpdir/spec/shuold-fire"
+printf 'typo\n' > "$tmpdir/spec/shuold-fire/case.txt"
+if ASMT_TRIGGER_CASES="$tmpdir" "$RUNNER" --list >/dev/null 2>&1; then
+  bad "REQ-1.1: an unknown expectation directory should fail discovery"
+else
+  ok "REQ-1.1: an unknown expectation directory fails discovery"
+fi
+rm -rf "$tmpdir"
+
+# --- isolation -------------------------------------------------------------
+#
+# Attempts run with permissions skipped, so where they run matters more than
+# what they say. The fake attempt records the environment it was handed, which
+# is how these assertions see inside a run without spawning anything.
+
+# A fake attempt command: records HOME and cwd, then emits a canned log in
+# which the expected skill fired, so every case passes and the run completes.
+make_fake() {
+  local f="$1" record="$2"
+  cat > "$f" <<FAKE
+#!/usr/bin/env bash
+# \$1 = prompt file, \$2 = log file to write
+printf 'HOME=%s\nPWD=%s\n' "\$HOME" "\$PWD" >> "$record"
+expectation="\$(basename "\$(dirname "\$1")")"
+skill="\$(basename "\$(dirname "\$(dirname "\$1")")")"
+# Behave as the ideal plugin would: fire on should-fire cases, stay out of the
+# should-not-fire ones, so a clean run really is clean.
+if [ "\$expectation" = should-fire ]; then
+  printf '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"asmt:%s"}}]}}\n' "\$skill" > "\$2"
+else
+  printf '{"type":"result","subtype":"success"}\n' > "\$2"
+fi
+exit 0
+FAKE
+  chmod +x "$f"
+}
+
+fakedir="$(mktemp -d)"
+record="$fakedir/calls.txt"
+make_fake "$fakedir/attempt" "$record"
+
+before_status="$(git -C "$HERE/.." status --porcelain)"
+run_out="$(ASMT_TRIGGER_CASES="$TINY" ASMT_TRIGGER_CMD="$fakedir/attempt" "$RUNNER" 2>&1)"
+run_code=$?
+
+if [ "$run_code" -eq 0 ]; then
+  ok "REQ-3.1: a full run with every case passing exits 0"
+else
+  bad "REQ-3.1: full fake run should exit 0, got $run_code: $run_out"
+fi
+
+# REQ-3.1: the HOME handed to every attempt is not the developer's, and holds
+# no plugin of its own — only the one under test, via --plugin-dir.
+homes="$(grep '^HOME=' "$record" | sed 's/^HOME=//' | sort -u)"
+if [ -n "$homes" ] && ! printf '%s\n' "$homes" | grep -qx "$HOME"; then
+  ok "REQ-3.1: attempts run with a HOME that is not the developer's"
+else
+  bad "REQ-3.1: an attempt ran with the real HOME ($homes)"
+fi
+
+leaked=0
+while IFS= read -r h; do
+  [ -n "$h" ] || continue
+  [ -e "$h/.claude/plugins" ] && leaked=1
+done <<< "$homes"
+if [ "$leaked" -eq 0 ]; then
+  ok "REQ-3.1: no other plugin is installed in the isolated HOME"
+else
+  bad "REQ-3.1: the isolated HOME contains an installed plugin tree"
+fi
+
+# REQ-3.2: and the working directory is a throwaway, never this repository.
+repo_root="$(cd "$HERE/.." && pwd)"
+pwds="$(grep '^PWD=' "$record" | sed 's/^PWD=//' | sort -u)"
+if [ -n "$pwds" ] && ! printf '%s\n' "$pwds" | grep -qx "$repo_root"; then
+  ok "REQ-3.2: attempts run outside the repository under test"
+else
+  bad "REQ-3.2: an attempt ran in the repository itself ($pwds)"
+fi
+
+# REQ-3.3: and the repository is untouched by the whole thing.
+after_status="$(git -C "$HERE/.." status --porcelain)"
+if [ "$after_status" = "$before_status" ]; then
+  ok "REQ-3.3: the repository is unchanged after a full run"
+else
+  bad "REQ-3.3: the repository changed during a run"
+fi
+
+rm -rf "$fakedir"
+
+# --- outside the gate ------------------------------------------------------
+
+# REQ-4.1: run-all globs tests/test-*, so the runner staying out of that glob
+# is the mechanism that keeps nested sessions out of every verify.
+#
+# ponytail: static checks, not a shimmed PATH and a nested run-all. Proving
+# "run-all spawned no session" empirically costs a second full suite run on
+# every gate — the thing this change exists to avoid. The ceiling is a test-*
+# file that shells out to `claude` directly under some other name; the upgrade
+# path is the PATH shim, once there is a reason to think that happened.
+if ls "$HERE"/test-* 2>/dev/null | grep -q 'run-triggers'; then
+  bad "REQ-4.1: run-triggers is inside run-all's test-* glob"
+else
+  ok "REQ-4.1: run-triggers is outside run-all's test-* glob"
+fi
+
+unguarded=""
+for f in "$HERE"/test-*; do
+  grep -q 'run-triggers' "$f" 2>/dev/null || continue
+  grep -q 'ASMT_TRIGGER_CMD' "$f" 2>/dev/null || unguarded="$unguarded $(basename "$f")"
+done
+if [ -z "$unguarded" ]; then
+  ok "REQ-4.1: no gate test invokes the runner without the fake seam"
+else
+  bad "REQ-4.1: gate test(s) call run-triggers unguarded:$unguarded"
+fi
+
+# REQ-4.2: the runner's own command runs every case and fails the run when any
+# case fails.
+fakedir2="$(mktemp -d)"
+cat > "$fakedir2/attempt" <<'FAKE'
+#!/usr/bin/env bash
+expectation="$(basename "$(dirname "$1")")"
+skill="$(basename "$(dirname "$(dirname "$1")")")"
+# Behaves correctly everywhere except the situational case, which is the single
+# failure this run is built around.
+if [ "$expectation" = should-fire ] && [ "$(basename "$1")" != situational.txt ]; then
+  printf '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"asmt:%s"}}]}}\n' "$skill" > "$2"
+else
+  printf '{"type":"result","subtype":"success"}\n' > "$2"
+fi
+exit 0
+FAKE
+chmod +x "$fakedir2/attempt"
+
+run_out="$(ASMT_TRIGGER_CASES="$TINY" ASMT_TRIGGER_CMD="$fakedir2/attempt" "$RUNNER" 2>&1)"
+run_code=$?
+
+if [ "$run_code" -ne 0 ]; then
+  ok "REQ-4.2: the runner exits non-zero when a case fails"
+else
+  bad "REQ-4.2: one failing case should fail the run, got exit 0"
+fi
+
+reported="$(printf '%s\n' "$run_out" | grep -c '^ok   -\|^FAIL -')"
+if [ "$reported" = "$TINY_N" ]; then
+  ok "REQ-4.2: every case is reported ($reported)"
+else
+  bad "REQ-4.2: expected $TINY_N cases reported, got $reported"
+fi
+
+case "$run_out" in
+  *"FAIL - spec should-fire situational"*)
+    ok "REQ-4.2: the failing case is named in the report" ;;
+  *)
+    bad "REQ-4.2: the report did not name the failing case: $run_out" ;;
+esac
+rm -rf "$fakedir2"
+
+# --- absent tooling skips --------------------------------------------------
+
+# REQ-5.1: no claude on PATH is not a red suite. It is a machine that cannot
+# run these tests, which is a different thing from tests that failed — the same
+# distinction the attribution check already makes when the vendor clone is
+# absent.
+# A PATH with the usual tools but no claude on it — stripping PATH entirely
+# would take bash with it and prove nothing.
+skip_out="$(env -u ASMT_TRIGGER_CMD PATH=/usr/bin:/bin ASMT_TRIGGER_CASES="$TINY" "$RUNNER" 2>&1)"
+skip_code=$?
+if [ "$skip_code" -eq 0 ]; then
+  ok "REQ-5.1: a machine with no claude on PATH exits 0"
+else
+  bad "REQ-5.1: missing claude should exit 0, got $skip_code: $skip_out"
+fi
+case "$skip_out" in
+  *skip*claude*|*claude*skip*) ok "REQ-5.1: the skip names the missing tool" ;;
+  *) bad "REQ-5.1: skip did not name claude: $skip_out" ;;
+esac
+
+# REQ-5.2: a session that cannot authenticate has not told us anything about
+# our descriptions, so it is a skip too — not a failure someone will waste an
+# afternoon on.
+fakedir3="$(mktemp -d)"
+cat > "$fakedir3/attempt" <<'FAKE'
+#!/usr/bin/env bash
+printf 'Invalid API key · Please run /login\n' > "$2"
+exit 1
+FAKE
+chmod +x "$fakedir3/attempt"
+
+auth_out="$(ASMT_TRIGGER_CASES="$TINY" ASMT_TRIGGER_CMD="$fakedir3/attempt" "$RUNNER" 2>&1)"
+auth_code=$?
+if [ "$auth_code" -eq 0 ]; then
+  ok "REQ-5.2: an unauthenticated run exits 0 rather than failing"
+else
+  bad "REQ-5.2: auth failure should not fail the run, got $auth_code: $auth_out"
+fi
+skipped="$(printf '%s\n' "$auth_out" | grep -c '^skip -')"
+if [ "$skipped" = "$TINY_N" ]; then
+  ok "REQ-5.2: every case is reported as a skip ($skipped)"
+else
+  bad "REQ-5.2: expected $TINY_N skips, got $skipped: $auth_out"
+fi
+rm -rf "$fakedir3"
+
+# An attempt that fails for some *other* reason is a real failure — skipping
+# on any non-zero exit would turn a broken runner into a green suite.
+fakedir4="$(mktemp -d)"
+cat > "$fakedir4/attempt" <<'FAKE'
+#!/usr/bin/env bash
+printf 'segfault, core dumped\n' > "$2"
+exit 139
+FAKE
+chmod +x "$fakedir4/attempt"
+
+crash_out="$(ASMT_TRIGGER_CASES="$TINY" ASMT_TRIGGER_CMD="$fakedir4/attempt" "$RUNNER" 2>&1)"
+crash_code=$?
+if [ "$crash_code" -ne 0 ]; then
+  ok "REQ-5.2: an attempt failing for another reason still fails the run"
+else
+  bad "REQ-5.2: a crashing attempt should fail the run, got exit 0"
+fi
+rm -rf "$fakedir4"
+
+# --- diagnosable failures --------------------------------------------------
+
+# REQ-6.1: a failing case names the log it produced. Without that, the only way
+# to find out why a phrasing did not fire is to spend the tokens again.
+fakedir5="$(mktemp -d)"
+cat > "$fakedir5/attempt" <<'FAKE'
+#!/usr/bin/env bash
+skill="$(basename "$(dirname "$(dirname "$1")")")"
+expectation="$(basename "$(dirname "$1")")"
+if [ "$expectation" = should-fire ] && [ "$(basename "$1")" != situational.txt ]; then
+  printf '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"asmt:%s"}}]}}\n' "$skill" > "$2"
+else
+  printf '{"type":"result","subtype":"success"}\n' > "$2"
+fi
+exit 0
+FAKE
+chmod +x "$fakedir5/attempt"
+
+diag_out="$(ASMT_TRIGGER_CASES="$TINY" ASMT_TRIGGER_CMD="$fakedir5/attempt" "$RUNNER" 2>&1)"
+
+fail_line="$(printf '%s\n' "$diag_out" | grep '^FAIL - spec should-fire situational' | head -n 1)"
+logpath="$(printf '%s' "$fail_line" | sed -n 's/.*log: \(.*\))$/\1/p')"
+
+if [ -n "$logpath" ]; then
+  ok "REQ-6.1: the failure names a log path"
+else
+  bad "REQ-6.1: failure line names no log path: $fail_line"
+fi
+
+if [ -n "$logpath" ] && [ -f "$logpath" ]; then
+  ok "REQ-6.1: the named log actually exists"
+else
+  bad "REQ-6.1: named log is missing: '$logpath'"
+fi
+
+if [ -n "$logpath" ] && [ -s "$logpath" ]; then
+  ok "REQ-6.1: the named log holds the captured session output"
+else
+  bad "REQ-6.1: named log is empty: '$logpath'"
+fi
+
+rm -rf "$fakedir5"
+
+# --- flakiness -------------------------------------------------------------
+#
+# Model behaviour is not deterministic: the same prompt can fail once and pass
+# on the next run. Retrying keeps that from reading as a broken description —
+# and reporting the retry keeps a weak description from hiding behind one.
+
+# REQ-7.3: a case that passes first time spawns exactly one session. Retrying
+# every case regardless would multiply the cost of the whole suite to learn
+# nothing about the cases that already work.
+fakedir6="$(mktemp -d)"
+count6="$fakedir6/calls"
+: > "$count6"
+cat > "$fakedir6/attempt" <<FAKE
+#!/usr/bin/env bash
+printf 'x\n' >> "$count6"
+expectation="\$(basename "\$(dirname "\$1")")"
+skill="\$(basename "\$(dirname "\$(dirname "\$1")")")"
+if [ "\$expectation" = should-fire ]; then
+  printf '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"asmt:%s"}}]}}\n' "\$skill" > "\$2"
+else
+  printf '{"type":"result","subtype":"success"}\n' > "\$2"
+fi
+exit 0
+FAKE
+chmod +x "$fakedir6/attempt"
+
+clean_out="$(ASMT_TRIGGER_CASES="$TINY" ASMT_TRIGGER_CMD="$fakedir6/attempt" "$RUNNER" 2>&1)"
+attempts6="$(grep -c . "$count6")"
+if [ "$attempts6" = "$TINY_N" ]; then
+  ok "REQ-7.3: a clean run spawns exactly one session per case ($attempts6)"
+else
+  bad "REQ-7.3: expected $TINY_N attempts on a clean run, got $attempts6"
+fi
+case "$clean_out" in
+  *flaky*) bad "REQ-7.3: a clean run should not mention flaky: $clean_out" ;;
+  *)       ok "REQ-7.3: a clean run reports nothing as flaky" ;;
+esac
+rm -rf "$fakedir6"
+
+# REQ-7.1: fails once, passes on the retry — the case passes, the suite passes,
+# and the report says it took two goes.
+fakedir7="$(mktemp -d)"
+count7="$fakedir7/calls"
+: > "$count7"
+cat > "$fakedir7/attempt" <<FAKE
+#!/usr/bin/env bash
+printf 'x\n' >> "$count7"
+n=\$(grep -c . "$count7")
+expectation="\$(basename "\$(dirname "\$1")")"
+skill="\$(basename "\$(dirname "\$(dirname "\$1")")")"
+# The very first attempt of the run misbehaves; everything after it is correct.
+if [ "\$expectation" = should-fire ] && [ "\$n" -gt 1 ]; then
+  printf '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Skill","input":{"skill":"asmt:%s"}}]}}\n' "\$skill" > "\$2"
+else
+  printf '{"type":"result","subtype":"success"}\n' > "\$2"
+fi
+exit 0
+FAKE
+chmod +x "$fakedir7/attempt"
+
+flaky_out="$(ASMT_TRIGGER_CASES="$TINY" ASMT_TRIGGER_CMD="$fakedir7/attempt" "$RUNNER" 2>&1)"
+flaky_code=$?
+if [ "$flaky_code" -eq 0 ]; then
+  ok "REQ-7.1: a case that passes on retry does not fail the suite"
+else
+  bad "REQ-7.1: retry-pass should not fail the suite, got $flaky_code: $flaky_out"
+fi
+case "$flaky_out" in
+  *flaky*) ok "REQ-7.1: the retried case is reported as flaky" ;;
+  *)       bad "REQ-7.1: no flaky report: $flaky_out" ;;
+esac
+case "$flaky_out" in
+  *"2 attempt"*) ok "REQ-7.1: the report names how many attempts it took" ;;
+  *)             bad "REQ-7.1: attempt count not reported: $flaky_out" ;;
+esac
+rm -rf "$fakedir7"
+
+# REQ-7.2: never passes within budget — a real failure, and the suite says so.
+fakedir8="$(mktemp -d)"
+count8="$fakedir8/calls"
+: > "$count8"
+cat > "$fakedir8/attempt" <<FAKE
+#!/usr/bin/env bash
+printf 'x\n' >> "$count8"
+printf '{"type":"result","subtype":"success"}\n' > "\$2"
+exit 0
+FAKE
+chmod +x "$fakedir8/attempt"
+
+never_out="$(ASMT_TRIGGER_CASES="$TINY" ASMT_TRIGGER_CMD="$fakedir8/attempt" "$RUNNER" 2>&1)"
+never_code=$?
+if [ "$never_code" -ne 0 ]; then
+  ok "REQ-7.2: a case that never passes fails the suite"
+else
+  bad "REQ-7.2: a never-passing case should fail the suite, got exit 0"
+fi
+# The should-fire case burns its whole budget; the should-not-fire case passes
+# first time, so the total is budget + 1 rather than budget x cases.
+attempts8="$(grep -c . "$count8")"
+if [ "$attempts8" -gt "$TINY_N" ] && [ "$attempts8" -le 10 ]; then
+  ok "REQ-7.2: retries are bounded by a budget ($attempts8 attempts)"
+else
+  bad "REQ-7.2: attempts not bounded sensibly, got $attempts8"
+fi
+rm -rf "$fakedir8"
+
+rm -rf "$TINY"
+
+[ "$fails" -eq 0 ] || printf '\n%s assertion(s) failed\n' "$fails"
+exit "$((fails > 0))"
