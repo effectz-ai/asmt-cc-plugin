@@ -26,7 +26,7 @@ actually runs, not a copy of it.
 
 ## T-1: the judge — decide a case from a captured session log
 
-- [ ] Complete
+- [x] Complete
 
 Satisfies: REQ-2.2, REQ-6.2
 
@@ -38,7 +38,7 @@ nested session runs here.
 
 ## T-2: case discovery and the prompt fixtures
 
-- [ ] Complete
+- [x] Complete
 
 Satisfies: REQ-1.1, REQ-1.2, REQ-1.3, REQ-2.1
 
@@ -52,7 +52,7 @@ expectation.
 
 ## T-3: isolation — a nested session touches nothing it shouldn't
 
-- [ ] Complete
+- [x] Complete
 
 Satisfies: REQ-3.1, REQ-3.2, REQ-3.3
 
@@ -65,7 +65,7 @@ harmless.
 
 ## T-4: outside the gate, and its own front door
 
-- [ ] Complete
+- [x] Complete
 
 Satisfies: REQ-4.1, REQ-4.2
 
@@ -75,7 +75,7 @@ every case and exits non-zero when any case fails.
 
 ## T-5: absent tooling skips rather than fails
 
-- [ ] Complete
+- [x] Complete
 
 Satisfies: REQ-5.1, REQ-5.2
 
@@ -87,7 +87,7 @@ report rather than pretending.
 
 ## T-6: a failure can be diagnosed without re-running it
 
-- [ ] Complete
+- [x] Complete
 
 Satisfies: REQ-6.1
 
@@ -95,7 +95,7 @@ Keep each attempt's captured output, and name the path in the failure report.
 
 ## T-7: flakiness is retried, then reported
 
-- [ ] Complete
+- [x] Complete
 
 Satisfies: REQ-7.1, REQ-7.2, REQ-7.3
 
@@ -106,7 +106,7 @@ so that is asserted rather than assumed.
 
 ## T-8: run the real suite once and record what it says
 
-- [ ] Complete
+- [x] Complete
 
 Satisfies: none
 
