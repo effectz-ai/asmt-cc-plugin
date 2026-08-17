@@ -2,7 +2,8 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-GATE="$HERE/../plugins/asmt/bin/asmt-gate"
+# Overridable so a test can prove a fix red against the previous binary.
+GATE="${ASMT_GATE_BIN:-$HERE/../plugins/asmt/bin/asmt-gate}"
 # shellcheck source=fixtures.sh
 . "$HERE/fixtures.sh"
 
@@ -135,6 +136,105 @@ verify:
 CFG
 ( cd "$repo_notimeout" && git add -A && git commit -qm "no-timeout fixture" )
 is "run: absent timeout_seconds does not break the run" "$(run_in "$repo_notimeout" run)" "0"
+
+
+# --- portability: no GNU coreutils (macOS) ---------------------------------
+#
+# Observed on macOS: `timeout: command not found` made the subshell exit 127,
+# so the gate recorded "result":"fail","seconds":0 having never run the verify
+# command at all. It failed closed, which is the right direction, but a gate
+# that reports failure without running anything is still lying.
+#
+# ASMT_TIMEOUT_BIN is a test seam: the gate resolves timeout/gtimeout into it,
+# and setting it empty simulates a machine that has neither.
+
+# REQ-1.1: with no timeout binary available, the verify command still runs and
+# its own exit status decides the result.
+#
+# Simulated with the ASMT_TIMEOUT_BIN seam rather than by stripping PATH: on
+# Cygwin a pared-down PATH cannot load the DLLs bash itself needs, so the shell
+# dies before the gate runs and the test proves nothing. The static assertion
+# below covers what the seam cannot — that the gate resolves a binary instead
+# of calling one blind, which is the actual macOS bug.
+repo_notimeout_pass="$(new_repo true)"
+out="$(cd "$repo_notimeout_pass" && ASMT_TIMEOUT_BIN="" "$GATE" run 2>&1)"
+code=$?
+if [ "$code" -eq 0 ]; then
+  ok "REQ-1.1: gate passes with no timeout binary available"
+else
+  bad "REQ-1.1: gate should pass without a timeout binary, got $code: $out"
+fi
+receipt="$repo_notimeout_pass/.asmt/receipts/$(head_sha "$repo_notimeout_pass").json"
+if grep -q '"result":"pass"' "$receipt" 2>/dev/null; then
+  ok "REQ-1.1: the receipt records the verify command's own result"
+else
+  bad "REQ-1.1: receipt did not record a pass: $(cat "$receipt" 2>/dev/null)"
+fi
+
+repo_notimeout_fail="$(new_repo false)"
+( cd "$repo_notimeout_fail" && ASMT_TIMEOUT_BIN="" "$GATE" run >/dev/null 2>&1 )
+receipt="$repo_notimeout_fail/.asmt/receipts/$(head_sha "$repo_notimeout_fail").json"
+if grep -q '"result":"fail"' "$receipt" 2>/dev/null; then
+  ok "REQ-1.1: a genuinely failing command still records a fail"
+else
+  bad "REQ-1.1: failing command did not record a fail"
+fi
+
+# REQ-1.1: and the gate must never call `timeout` without resolving it first.
+# This is the assertion that fails against the binary macOS choked on.
+if grep -q '[^_A-Za-z]timeout "$timeout_secs"' "$GATE"; then
+  bad "REQ-1.1: the gate calls a bare timeout without resolving it"
+else
+  ok "REQ-1.1: the gate resolves a timeout binary before calling it"
+fi
+
+# REQ-1.2: dropping a configured timeout is announced, not silent.
+repo_warn="$(new_repo true)"
+( cd "$repo_warn" && printf 'verify:\n  command: "true"\n  timeout_seconds: 30\n' > .asmt/config.yml \
+    && git add -A && git commit -qm "configure a timeout" )
+warn_out="$(cd "$repo_warn" && ASMT_TIMEOUT_BIN="" "$GATE" run 2>&1)"
+case "$warn_out" in
+  *unbounded*|*"no timeout"*|*"without a timeout"*)
+    ok "REQ-1.2: the gate says the run was unbounded" ;;
+  *)
+    bad "REQ-1.2: dropped timeout was not announced: $warn_out" ;;
+esac
+
+# REQ-1.3: whatever binary is resolved is the one that runs, and its verdict
+# is honoured — which is what makes the gtimeout fallback work by construction.
+# The resolution *order* (timeout preferred, gtimeout second) cannot be
+# exercised here: proving it needs a machine without `timeout`, and on Cygwin a
+# stripped PATH kills bash before the gate starts. Verified by reading on this
+# platform, by the macOS run on that one.
+stub_dir="$(mktemp -d)"
+cat > "$stub_dir/gtimeout" <<'STUB'
+#!/usr/bin/env bash
+# Stands in for gtimeout: ignores the command and reports a timeout kill.
+printf 'stub-gtimeout: killed
+' >&2
+exit 124
+STUB
+chmod +x "$stub_dir/gtimeout"
+
+repo_stub="$(new_repo true)"
+( cd "$repo_stub" && ASMT_TIMEOUT_BIN="$stub_dir/gtimeout" "$GATE" run >/dev/null 2>&1 )
+receipt="$repo_stub/.asmt/receipts/$(head_sha "$repo_stub").json"
+if grep -q '"result":"fail"' "$receipt" 2>/dev/null; then
+  ok "REQ-1.3: the resolved timeout binary is used and its verdict honoured"
+else
+  bad "REQ-1.3: resolved binary's kill was not honoured: $(cat "$receipt" 2>/dev/null)"
+fi
+rm -rf "$stub_dir"
+
+# REQ-2.1: the receipt's timestamp survives a date without GNU's -I.
+repo_date="$(new_repo true)"
+( cd "$repo_date" && "$GATE" run >/dev/null 2>&1 )
+receipt="$repo_date/.asmt/receipts/$(head_sha "$repo_date").json"
+at="$(sed -n 's/.*"at":"\([^"]*\)".*/\1/p' "$receipt" 2>/dev/null)"
+case "$at" in
+  ????-??-??T??:??:??Z) ok "REQ-2.1: the receipt carries a UTC ISO-8601 timestamp ($at)" ;;
+  *)                    bad "REQ-2.1: timestamp is not portable UTC ISO-8601: '$at'" ;;
+esac
 
 [ "$fails" -eq 0 ] || printf '\n%s assertion(s) failed\n' "$fails"
 exit "$((fails > 0))"

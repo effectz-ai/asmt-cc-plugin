@@ -49,7 +49,32 @@ cmd_run() {
 
   mkdir -p "$RECEIPTS"
   start="$(date +%s)"
-  if ( cd "$ROOT" && timeout "$timeout_secs" bash -c "$cmd" ); then result=pass; else result=fail; fi
+
+  # `timeout` is GNU coreutils and macOS does not ship it. Calling it blind
+  # made the subshell exit 127, so the gate wrote "result":"fail","seconds":0
+  # having never run the verify command — a verdict about nothing. Resolve a
+  # binary first, and when there is none, run the command anyway rather than
+  # reporting a failure that never happened.
+  #
+  # ASMT_TIMEOUT_BIN is honoured if already set, which is how the tests
+  # simulate a machine with neither binary.
+  if [ -z "${ASMT_TIMEOUT_BIN+set}" ]; then
+    ASMT_TIMEOUT_BIN="$(command -v timeout || command -v gtimeout || true)"
+  fi
+
+  if [ -n "$ASMT_TIMEOUT_BIN" ]; then
+    if ( cd "$ROOT" && "$ASMT_TIMEOUT_BIN" "$timeout_secs" bash -c "$cmd" ); then
+      result=pass
+    else
+      result=fail
+    fi
+  else
+    # A dropped timeout is a fact the operator needs. Saying so beats silently
+    # downgrading a configured limit, and beats refusing to verify at all.
+    [ "$timeout_secs" = 0 ] || printf 'asmt-gate: no timeout or gtimeout on PATH — running unbounded (verify.timeout_seconds: %s ignored).\n' "$timeout_secs" >&2
+    if ( cd "$ROOT" && bash -c "$cmd" ); then result=pass; else result=fail; fi
+  fi
+
   seconds="$(( $(date +%s) - start ))"
 
   # escape backslashes before quotes, so the receipt is valid JSON even when
@@ -57,7 +82,7 @@ cmd_run() {
   esc="${cmd//\\/\\\\}"
   esc="${esc//\"/\\\"}"
   printf '{"sha":"%s","result":"%s","command":"%s","at":"%s","seconds":%s}\n' \
-    "$SHA" "$result" "$esc" "$(date -Iseconds)" "$seconds" > "$RECEIPT"
+    "$SHA" "$result" "$esc" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$seconds" > "$RECEIPT"
 
   [ "$result" = pass ] || die "FAILED — receipt $RECEIPT"
   printf 'asmt-gate: pass (%s)\n' "$SHA"

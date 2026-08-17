@@ -297,7 +297,9 @@ Satisfies: REQ-1.1
 - [ ] Complete
 
 Satisfies: REQ-1.2'
-before="$(md5sum < "$c/tasks.md")"
+# cksum, not md5sum: macOS ships `md5` instead and this only needs to
+# detect a change, not resist an attacker.
+before="$(cksum < "$c/tasks.md")"
 precheck "$c"
 if [ "$code" -ne 0 ]; then
   ok "REQ-5.1: a plan with a completed task fails precheck"
@@ -308,7 +310,7 @@ case "$out" in
   *T-1*) ok "REQ-5.1: the failure names the completed task" ;;
   *)     bad "REQ-5.1: failure did not name T-1: $out" ;;
 esac
-if [ "$(md5sum < "$c/tasks.md")" = "$before" ]; then
+if [ "$(cksum < "$c/tasks.md")" = "$before" ]; then
   ok "REQ-5.1: tasks.md is left byte-for-byte unchanged"
 else
   bad "REQ-5.1: precheck modified tasks.md"
