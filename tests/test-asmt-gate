@@ -200,6 +200,32 @@ case "$warn_out" in
     bad "REQ-1.2: dropped timeout was not announced: $warn_out" ;;
 esac
 
+# REQ-1.3: whatever binary is resolved is the one that runs, and its verdict
+# is honoured — which is what makes the gtimeout fallback work by construction.
+# The resolution *order* (timeout preferred, gtimeout second) cannot be
+# exercised here: proving it needs a machine without `timeout`, and on Cygwin a
+# stripped PATH kills bash before the gate starts. Verified by reading on this
+# platform, by the macOS run on that one.
+stub_dir="$(mktemp -d)"
+cat > "$stub_dir/gtimeout" <<'STUB'
+#!/usr/bin/env bash
+# Stands in for gtimeout: ignores the command and reports a timeout kill.
+printf 'stub-gtimeout: killed
+' >&2
+exit 124
+STUB
+chmod +x "$stub_dir/gtimeout"
+
+repo_stub="$(new_repo true)"
+( cd "$repo_stub" && ASMT_TIMEOUT_BIN="$stub_dir/gtimeout" "$GATE" run >/dev/null 2>&1 )
+receipt="$repo_stub/.asmt/receipts/$(head_sha "$repo_stub").json"
+if grep -q '"result":"fail"' "$receipt" 2>/dev/null; then
+  ok "REQ-1.3: the resolved timeout binary is used and its verdict honoured"
+else
+  bad "REQ-1.3: resolved binary's kill was not honoured: $(cat "$receipt" 2>/dev/null)"
+fi
+rm -rf "$stub_dir"
+
 # REQ-2.1: the receipt's timestamp survives a date without GNU's -I.
 repo_date="$(new_repo true)"
 ( cd "$repo_date" && "$GATE" run >/dev/null 2>&1 )
