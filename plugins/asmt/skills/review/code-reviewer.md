@@ -80,16 +80,28 @@ Subagent (general-purpose):
     - Security concerns?
     - Integrates cleanly with surrounding code?
 
-    **Testing:**
+    **Testing** (read `tests` in `.asmt/config.yml`; missing means `focused`):
     - Tests verify real behavior, not mocks?
-    - Edge cases covered?
-    - Integration tests where they matter?
+    - Does every behaviour the mode covers have one test, at the cheapest
+      level that proves it (unit before route before end-to-end)?
+    - Tests beyond the mode, a file per scenario, or a full-app harness
+      where a unit test would do? Those are findings, like unrequested code.
+    - UI, glue, or config the mode leaves untested without a
+      `Check by hand` item in the ledger?
     - All tests passing?
+
+    **Comments:** A comment says why, and only when the code cannot. Never
+    restate the code. Never put a ticket id, PR number, or change history in
+    a comment — git and the PR hold that. Flag every comment that breaks
+    this rule.
+
+    **Commits:** Any commit whose only content is plan, progress, or other
+    `.asmt/work/` bookkeeping is a finding.
 
     **Production readiness:**
     - Migration strategy if schema changed?
     - Backward compatibility considered?
-    - Documentation complete?
+    - Documentation changed where the design asked for it, and nowhere else?
     - No obvious bugs?
 
     ## Calibration

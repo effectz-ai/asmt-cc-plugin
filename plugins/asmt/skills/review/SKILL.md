@@ -1,9 +1,15 @@
 ---
 name: review
-description: Use when completing tasks, implementing major features, or before merging to verify work meets requirements
+description: Use when completing tasks, implementing major features, or before merging, to get the work reviewed — and when receiving code review feedback, before acting on it, especially if it seems unclear or technically questionable.
 ---
 
-# Requesting Code Review
+# Review
+
+Read `.asmt/config.yml`. If it is missing, stop: this repo needs one (see the plugin README). If `version` is not `2`, stop and tell the user to set `version: 2` and delete `modes`, `size_classes`, `default_size_class`, and `paths`. Missing `docs` means `pr`; missing `tests` means `focused`; any other value for either, stop and name it.
+
+**Receiving review feedback** (from a reviewer subagent, a teammate, or a PR
+comment)? Read [receiving.md](receiving.md) in this directory and follow it.
+The rest of this skill is about requesting a review.
 
 Dispatch a code reviewer subagent to catch issues before they cascade. The reviewer gets precisely crafted context for evaluation — never your session's history.
 

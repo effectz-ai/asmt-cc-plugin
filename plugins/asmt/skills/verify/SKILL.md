@@ -1,9 +1,29 @@
 ---
 name: verify
-description: Use when about to claim work is complete, fixed, or passing, before committing or creating PRs - requires running verification commands and confirming output before making any success claims; evidence before assertions always
+description: Use when about to claim work is complete, fixed, or passing, and whenever the user wants to verify, gate, or check the current commit — including "is this green?", "did that break anything?", "can I open the PR yet?". Runs the repo gate and writes a receipt; evidence before assertions always.
 ---
 
-# Verification Before Completion
+# Verify
+
+Read `.asmt/config.yml`. If it is missing, stop: this repo needs one (see the plugin README). If `version` is not `2`, stop and tell the user to set `version: 2` and delete `modes`, `size_classes`, `default_size_class`, and `paths`. Missing `docs` means `pr`; missing `tests` means `focused`; any other value for either, stop and name it.
+
+## The repo gate
+
+1. Run `git status --porcelain`. If it is non-empty, stop and ask the user to
+   commit. The receipt is a fact about a commit, not about a workspace.
+2. Run `asmt-gate run`. Never run `verify.command` yourself: only `asmt-gate`
+   writes the receipt, and a run without a receipt has not happened.
+3. If it fails, report the failing output verbatim. Do not summarise it, and
+   do not start fixing things unless the user asks.
+4. If it passes, report the commit SHA and the receipt path
+   `.asmt/receipts/<sha>.json`, quoting `asmt-gate`'s own final line.
+
+A new commit invalidates the receipt; re-run the gate. `asmt-gate check`
+answers "does HEAD have a passing receipt?" without re-running anything —
+the PR guard uses exactly that.
+
+The gate is the evidence for "the suite is green". Everything below governs
+every other claim.
 
 ## Overview
 
