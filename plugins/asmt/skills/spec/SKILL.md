@@ -235,11 +235,14 @@ builder check.
 
 **Where it goes** depends on `docs` in `.asmt/config.yml`:
 
-- `docs: pr` (default): `.asmt/work/YYYY-MM-DD-<topic>/design.md`. Never
-  committed; `asmt:land` puts it in the PR description.
+- `docs: pr` (default): `design.md` in the folder `asmt-workdir
+  YYYY-MM-DD-<topic>` prints. Never committed; `asmt:land` puts it in the
+  PR description.
 - `docs: repo`: `docs/asmt/specs/YYYY-MM-DD-<topic>.md`, committed.
 
-The plan goes in the same `.asmt/work/YYYY-MM-DD-<topic>/` folder either way.
+Always get the folder from `asmt-workdir`: it resolves the main checkout
+from any worktree and keeps the folder out of git. Never create
+`.asmt/work/` by hand. The plan goes in the same topic folder either way.
 
 **Builder check** (for a project): dispatch a fresh subagent with
 `builder-check-prompt.md` in this directory. When you tell your human

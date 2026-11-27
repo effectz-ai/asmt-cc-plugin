@@ -36,8 +36,9 @@ WORKTREE_PATH=$(git rev-parse --show-toplevel)
 | `GIT_DIR != GIT_COMMON`, named branch | Standard options | Provenance-based (see Step 6) |
 | `GIT_DIR != GIT_COMMON`, detached HEAD | Push as new branch | Externally managed — leave in place |
 
-Find the topic folder: `.asmt/work/<topic>/` in the main checkout, the one
-holding this work's `plan.md` and `progress.md`.
+Find the topic folder with `asmt-workdir <topic>` (the topic the plan was
+saved under): it prints the main checkout's `.asmt/work/<topic>/`, holding
+this work's `plan.md` and `progress.md`.
 
 ## Step 3: Determine Base Branch
 

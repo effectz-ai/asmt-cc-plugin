@@ -52,6 +52,26 @@ for ref in $(grep -rhoE 'asmt:[a-z0-9-]+' "$PLUGIN/skills" 2>/dev/null | sort -u
     && ok "$ref resolves" || bad "$ref names no skill"
 done
 
+# land reads progress.md and design.md from the topic folder, so nothing
+# before land may delete it.
+deletes=$(grep -rnE 'rm -rf|delete this plan.s workspace' "$PLUGIN/skills/build" "$PLUGIN/skills/tdd" "$PLUGIN/skills/review" 2>/dev/null)
+[ -z "$deletes" ] \
+  && ok "build/review never delete the topic folder land needs" \
+  || bad "the topic folder is deleted before land:"$'\n'"$deletes"
+
+# The comment rule has to reach every agent that writes or reviews code.
+rule='A comment says why, and only when the code cannot.'
+for f in house-rules/SKILL.md build/implementer-prompt.md build/task-reviewer-prompt.md review/code-reviewer.md; do
+  grep -qF "$rule" "$PLUGIN/skills/$f" \
+    && ok "$f carries the comment rule" || bad "$f lacks the comment rule"
+done
+
+# Hook scripts must check out with LF everywhere, or bash chokes on \r.
+for f in "$PLUGIN/hooks/session-start" "$PLUGIN/hooks/pretooluse-guard" "$PLUGIN/bin/asmt-gate" "$PLUGIN/skills/build/scripts/sdd-workspace"; do
+  eol=$(git -C "$HERE/.." check-attr eol -- "${f#"$HERE/../"}" | sed 's/.*: //')
+  [ "$eol" = lf ] && ok "${f#"$PLUGIN/"} checks out as LF" || bad "${f#"$PLUGIN/"} eol is '$eol', not lf"
+done
+
 grep -q '"SessionStart"' "$PLUGIN/hooks/hooks.json" \
   && ok "hooks.json registers SessionStart" \
   || bad "hooks.json has no SessionStart hook — using-asmt is never injected"

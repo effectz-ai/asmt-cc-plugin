@@ -120,9 +120,17 @@ Subagent (general-purpose):
     - DRY without premature abstraction?
     - Edge cases handled?
 
-    **Tests:**
+    **Tests** (read `tests` in `.asmt/config.yml`; missing means `focused`):
     - Do the new and changed tests verify real behavior, not mocks?
-    - Are the task's edge cases covered?
+    - Are the edge cases of the behaviour the mode covers tested?
+    - Tests beyond the mode, a file per scenario, or a heavier level than
+      needed (end-to-end where a unit test would do)? Each is a finding.
+    - UI, glue, or config the mode leaves untested without a
+      `Check by hand:` line in the report?
+
+    **Comments:** A comment says why, and only when the code cannot. Never
+    restate the code. Never put a ticket id, PR number, or change history in
+    a comment — git and the PR hold that. Every comment that breaks this is a finding.
 
     **Structure:**
     - Does each file have one clear responsibility with a well-defined interface?

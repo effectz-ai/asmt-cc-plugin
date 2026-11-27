@@ -13,7 +13,7 @@ Write implementation plans for an engineer who has not seen this codebase or thi
 
 **Context:** If working in an isolated worktree, it should have been created via the `asmt:worktrees` skill at execution time.
 
-**Save plans to:** `.asmt/work/YYYY-MM-DD-<topic>/plan.md` — the same topic folder as the design. Never commit it.
+**Save plans to:** `plan.md` in the folder `asmt-workdir YYYY-MM-DD-<topic>` prints — the same topic as the design. Never commit it. Write the absolute paths it prints into the plan's `**Spec:**` line and the handoff, so a build running in a worktree can open them.
 - First, read `.asmt/config.yml`. If it is missing, stop: this repo needs one (see the plugin README). If `version` is not `2`, stop and tell the user to set `version: 2` and delete `modes`, `size_classes`, `default_size_class`, and `paths`. Missing `docs` means `pr`; missing `tests` means `focused`; any other value for either, stop and name it.
 
 ## Scope Check
@@ -191,7 +191,7 @@ them to review the plan and choose an execution method before implementation.
 
 **When no execution method has already been supplied:**
 
-**"Plan complete and saved to `.asmt/work/<topic>/plan.md`. Please review the plan. Which execution approach would you prefer?**
+**"Plan complete and saved to `<absolute path asmt-workdir printed>/plan.md`. Please review the plan. Which execution approach would you prefer?**
 
 - **Subagent-driven** - A fresh subagent implements each task and a fresh reviewer checks it before the next one starts, then a whole-branch review at the end. Most thorough; costs a fresh context per task and per review.
 - **Native** - I implement every task myself in this session, the way this harness runs work, then one fresh reviewer on the most capable model checks the whole branch. Cheapest and fastest; no independent review until the end. Runs well with a mid-tier session model, since the plan carries the design.
@@ -200,7 +200,7 @@ them to review the plan and choose an execution method before implementation.
 
 **When an execution method has already been supplied:**
 
-**"Plan complete and saved to `.asmt/work/<topic>/plan.md`. Please review the plan. Does it capture what you want?"**
+**"Plan complete and saved to `<absolute path asmt-workdir printed>/plan.md`. Please review the plan. Does it capture what you want?"**
 
 **If Subagent-driven chosen:**
 - **REQUIRED SUB-SKILL:** Use asmt:build

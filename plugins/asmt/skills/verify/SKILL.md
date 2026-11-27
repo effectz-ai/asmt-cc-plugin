@@ -9,6 +9,10 @@ Read `.asmt/config.yml`. If it is missing, stop: this repo needs one (see the pl
 
 ## The repo gate
 
+Use the gate when the claim is "the suite is green", "this commit is
+verified", or "ready for a PR". Mid-task claims (a fix works, a test now
+passes) need no commit or receipt: the Iron Law below governs them.
+
 1. Run `git status --porcelain`. If it is non-empty, stop and ask the user to
    commit. The receipt is a fact about a commit, not about a workspace.
 2. Run `asmt-gate run`. Never run `verify.command` yourself: only `asmt-gate`

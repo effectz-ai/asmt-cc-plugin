@@ -1,0 +1,9 @@
+# Hook and bin scripts run under bash on every OS; a CRLF checkout breaks
+# them (bash reads the \r as part of each command).
+plugins/asmt/hooks/* text eol=lf
+plugins/asmt/bin/* text eol=lf
+plugins/asmt/skills/**/scripts/* text eol=lf
+*.sh text eol=lf
+tests/* text eol=lf
+# The polyglot wrapper is parsed by both cmd and bash; bash needs LF.
+*.cmd text eol=lf

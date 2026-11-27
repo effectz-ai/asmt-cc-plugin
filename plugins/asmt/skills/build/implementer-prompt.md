@@ -61,6 +61,12 @@ Subagent (general-purpose):
     would strengthen my report" — that review is already scheduled.
     Report instead.
 
+    ## Comments
+
+    A comment says why, and only when the code cannot. Never
+    restate the code. Never put a ticket id, PR number, or change history in
+    a comment — git and the PR hold that.
+
     ## Code Organization
 
     You reason best about code you can hold in context at once, and your edits are more

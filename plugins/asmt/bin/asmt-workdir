@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# asmt-workdir <topic> — print (and create) .asmt/work/<topic>/ in the main
+# checkout. spec, plan, build and land all locate the design, plan and ledger
+# through this, so a session inside a worktree finds the same folder.
+#
+# The folder ignores itself from the first call, so a design in progress
+# never dirties the tree (asmt-gate refuses a dirty tree) and can never be
+# swept into a commit.
+set -euo pipefail
+
+die() { printf 'asmt-workdir: %s\n' "$1" >&2; exit 2; }
+
+topic="${1:-}"
+[ -n "$topic" ] || die "usage: asmt-workdir <YYYY-MM-DD-topic>"
+case "$topic" in */*|*\\*|.|..) die "topic must be a single folder name, got '$topic'" ;; esac
+
+common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) \
+  || die "not inside a git repository ($PWD)"
+base="$(cd "$common/.." && pwd -P)/.asmt/work"
+
+mkdir -p "$base/$topic"
+[ -e "$base/.gitignore" ] || printf '*\n' > "$base/.gitignore"
+
+cd "$base/$topic"
+if command -v cygpath >/dev/null 2>&1; then cygpath -m "$PWD"; else pwd; fi
