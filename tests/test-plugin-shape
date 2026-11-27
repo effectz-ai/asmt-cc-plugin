@@ -27,11 +27,34 @@ for s in $skills; do
     && ok "$rel: description is substantial" \
     || bad "$rel: description too short (${#desc} chars) — it is the trigger mechanism"
 
+  dir="$(basename "$(dirname "$s")")"
+  name="$(sed -n 's/^name: //p' "$s" | head -n 1)"
+  [ "$name" = "$dir" ] \
+    && ok "$rel: name matches its directory" \
+    || bad "$rel: name $name != directory $dir — the directory is the /asmt: command"
+
   lines=$(wc -l < "$s")
   [ "$lines" -le 500 ] \
     && ok "$rel: body within budget ($lines lines)" \
     || bad "$rel: $lines lines — split into references/"
 done
+
+# Ported text must not hand off to upstream skills or upstream paths: a stale
+# `superpowers:x` silently routes to a plugin the team does not have.
+stale=$(grep -rnE 'superpowers:|\.superpowers/|docs/superpowers' "$PLUGIN/skills" "$PLUGIN/hooks" 2>/dev/null)
+[ -z "$stale" ] \
+  && ok "no upstream skill names or paths left in skills/ or hooks/" \
+  || bad "upstream references left:"$'\n'"$stale"
+
+# Every asmt:<name> reference must name a skill that exists.
+for ref in $(grep -rhoE 'asmt:[a-z0-9-]+' "$PLUGIN/skills" 2>/dev/null | sort -u); do
+  [ -f "$PLUGIN/skills/${ref#asmt:}/SKILL.md" ] \
+    && ok "$ref resolves" || bad "$ref names no skill"
+done
+
+grep -q '"SessionStart"' "$PLUGIN/hooks/hooks.json" \
+  && ok "hooks.json registers SessionStart" \
+  || bad "hooks.json has no SessionStart hook — using-asmt is never injected"
 
 # Every ATTRIBUTION.md row must point at a file that exists, cite the SHA
 # pinned in vendor/UPSTREAM_SHAS for its upstream project, and (when a clone

@@ -1,5 +1,5 @@
 ---
-name: brainstorming
+name: spec
 description: "You MUST use this before any creative work - creating features, building components, adding functionality, modifying behavior, or planning anything new, in software or out of it (a talk, a business, a renovation)."
 ---
 
@@ -29,7 +29,7 @@ Before you start implementing, you must, in order:
    human partner pick one (see Lay out the approaches).
 2. Write the design doc, short or full (see Size the Work).
 3. Get their approval of that doc.
-4. Invoke the superpowers:writing-plans skill.
+4. Invoke the asmt:plan skill.
 
 If nothing is open when you write your first message and there's one
 sensible way, steps 1 to 3 happen in that message (see Your First
@@ -243,7 +243,7 @@ or two each and goes straight to your human partner, without the
 builder check.
 
 **Where it goes:** in a software repo,
-`docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`, committed.
+`docs/asmt/specs/YYYY-MM-DD-<topic>.md` (committed) or `.asmt/work/YYYY-MM-DD-<topic>/design.md` (not committed), per `docs` in `.asmt/config.yml`.
 Otherwise, pick a sensible place and say where. Your human partner's
 preferences override both.
 
@@ -279,7 +279,7 @@ stays labeled throwaway, and keeping what it produced is a new request
 that comes back through this gate.
 
 After the design doc is approved, the next step is the plan: invoke
-superpowers:writing-plans and no other skill.
+asmt:plan and no other skill.
 </HARD-GATE>
 
 ## Red Flags
