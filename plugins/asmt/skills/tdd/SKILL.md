@@ -1,6 +1,6 @@
 ---
 name: tdd
-description: Use when implementing any feature or bugfix, before writing implementation code
+description: Use when implementing any feature or bugfix, before writing implementation code. Decides, from the repo's tests mode, what gets a test and at what level.
 ---
 
 # Test-Driven Development (TDD)
@@ -13,28 +13,41 @@ Write the test first. Watch it fail. Write minimal code to pass.
 
 **Violating the letter of the rules is violating the spirit of the rules.**
 
-## When to Use
+## What gets a test
 
-**Always:**
-- New features
-- Bug fixes
-- Refactoring
-- Behavior changes
+Read `tests` in `.asmt/config.yml` (missing means `focused`). The team set
+it once for the repo; do not argue it per task.
 
-**Exceptions (ask your human partner):**
-- Throwaway prototypes
-- Generated code
-- Configuration files
+| Mode | Gets a test |
+|---|---|
+| `strict` | Test-first for every behaviour change. |
+| `focused` | Test-first for business rules, bug fixes, and branching logic. UI wiring, glue, and config are checked by running the app. |
+| `light` | Only regression tests for bug fixes, and money/security rules. |
 
-Thinking "skip TDD just this once"? Stop. That's rationalization.
+In every mode:
+
+- **One test per behaviour**, at the cheapest level that proves it: unit
+  before route before end-to-end. Reach for a full-app harness only when
+  nothing smaller can show the behaviour.
+- **No file per scenario.** Tests for one unit live together.
+- **Tests beyond the mode are scope creep**, the same as unrequested code.
+
+**Untested by mode is not unverified.** For work the mode leaves without a
+test, write the task's `Check by hand:` line: what to run or click, and
+what you should see. The developer runs it before landing and the reviewer
+sees it in the PR. A task with nothing to check writes `Check by hand: none`.
+
+Whatever the mode says gets a test, gets it first. Thinking "skip TDD just
+this once" for one of those? Stop. That's rationalization.
 
 ## The Iron Law
 
 ```
-NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST
+NO TESTED BEHAVIOUR WITHOUT A FAILING TEST FIRST
 ```
 
-Write code before the test? Delete it. Start over.
+"Tested behaviour" is whatever the mode above says gets a test. Write that
+code before its test? Delete it. Start over.
 
 **No exceptions:**
 - Don't keep it as "reference"
@@ -233,7 +246,7 @@ When writing or changing any test, read [writing-good-tests.md](writing-good-tes
 | "Test hard = design unclear" | Listen to test. Hard to test = hard to use. |
 | "TDD will slow me down" | TDD IS the pragmatic path: catches bugs before commit, prevents regressions, lets you refactor without fear. "Pragmatic" shortcuts mean debugging in production — slower, not faster. |
 | "Manual test faster" | Manual doesn't prove edge cases. You'll re-test every change. |
-| "Existing code has no tests" | You're improving it. Add tests for existing code. |
+| "Existing code has no tests" | Add a test for the behaviour you change, when the mode covers it — not for the whole file. |
 
 ## Red Flags - STOP and Start Over
 
@@ -294,7 +307,8 @@ Extract validation for multiple fields if needed.
 
 Before marking work complete:
 
-- [ ] Every new function/method has a test
+- [ ] Every behaviour the mode covers has one test, at the cheapest level
+- [ ] Every task the mode leaves untested has its `Check by hand:` line
 - [ ] Watched each test fail before implementing
 - [ ] Each test failed for expected reason (feature missing, not typo)
 - [ ] Wrote minimal code to pass each test
@@ -323,7 +337,7 @@ Never fix bugs without a test.
 ## Final Rule
 
 ```
-Production code → test exists and failed first
+Behaviour the mode covers → test exists and failed first
 Otherwise → not TDD
 ```
 
