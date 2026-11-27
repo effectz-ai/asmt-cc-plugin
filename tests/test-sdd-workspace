@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# sdd-workspace: a plan's build state lives in its own .asmt/work topic folder,
+# in the main checkout, and never shows up in git status.
+set -uo pipefail
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+WS="$HERE/../plugins/asmt/skills/build/scripts/sdd-workspace"
+# shellcheck source=fixtures.sh
+. "$HERE/fixtures.sh"
+
+fails=0
+ok()  { printf 'ok   - %s\n' "$1"; }
+bad() { printf 'FAIL - %s\n' "$1"; fails=$((fails + 1)); }
+is()  { [ "$2" = "$3" ] && ok "$1" || bad "$1 (expected $3, got $2)"; }
+
+# The script prints Windows-form paths where cygpath exists; compare alike.
+canon() {
+  local p
+  p="$(cd "$1" && pwd -P)" || return 1
+  if command -v cygpath >/dev/null 2>&1; then cygpath -m "$p"; else printf '%s\n' "$p"; fi
+}
+
+plan_at() { mkdir -p "$(dirname "$1")"; printf '# plan\n' > "$1"; }
+
+repo="$(new_repo)"
+plan_at "$repo/.asmt/work/2026-01-01-a/plan.md"
+plan_at "$repo/.asmt/work/2026-01-02-b/plan.md"
+plan_at "$repo/docs/x.md"
+
+a="$(cd "$repo" && bash "$WS" .asmt/work/2026-01-01-a/plan.md)"
+is "a plan in a topic folder uses that folder" "$a" "$(canon "$repo/.asmt/work/2026-01-01-a")"
+
+b="$(cd "$repo" && bash "$WS" .asmt/work/2026-01-02-b/plan.md)"
+is "two plan.md files get two folders" "$b" "$(canon "$repo/.asmt/work/2026-01-02-b")"
+
+x="$(cd "$repo" && bash "$WS" docs/x.md)"
+is "a plan outside .asmt/work gets .asmt/work/<basename>" "$x" "$(canon "$repo/.asmt/work/x" 2>/dev/null || echo missing)"
+
+is "the work folder ignores itself" "$(cat "$repo/.asmt/work/.gitignore" 2>/dev/null)" "*"
+git -C "$repo" add docs/x.md && git -C "$repo" commit -qm docs
+is "git status stays clean" "$(git -C "$repo" status --porcelain)" ""
+
+wt="$(mktemp -d)/wt"
+git -C "$repo" worktree add -q "$wt" -b side
+w="$(bash "$WS" -C "$wt" "$repo/.asmt/work/2026-01-01-a/plan.md")"
+is "from a worktree, the main checkout's topic folder" "$w" "$(canon "$repo/.asmt/work/2026-01-01-a")"
+printf '# n\n' > "$wt/notes.md"
+y="$(bash "$WS" -C "$wt" "$wt/notes.md")"
+is "from a worktree, an outside plan lands in the main checkout" "$y" "$(canon "$repo/.asmt/work/notes" 2>/dev/null || echo missing)"
+
+[ "$fails" -eq 0 ] || printf '\n%s assertion(s) failed\n' "$fails"
+exit "$((fails > 0))"

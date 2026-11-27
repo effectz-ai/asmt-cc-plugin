@@ -121,7 +121,7 @@ and the new one resumes from the same ledger.
   `scripts/sdd-workspace PLAN_FILE` by its
   absolute path, from the working tree you're executing in — it
   prints the plan's git-ignored directory
-  (`<repo-root>/.asmt/work/<plan-basename>/`), home to every
+  (`<main-checkout>/.asmt/work/<topic>/`), home to every
   artifact for THIS plan: ledger, briefs, review packages. Another plan's
   directory is never yours to read or write.
 - Check for this plan's ledger at `<workspace>/progress.md`. If its first

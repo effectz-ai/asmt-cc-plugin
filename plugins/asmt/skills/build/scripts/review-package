@@ -5,7 +5,7 @@
 # tasks intact.
 #
 # Usage: review-package [-C DIR] PLAN_FILE BASE HEAD [OUTFILE]
-# Default OUTFILE: <repo-root>/.asmt/work/<plan-basename>/review-<base7>..<head7>.diff
+# Default OUTFILE: <main-checkout>/.asmt/work/<topic>/review-<base7>..<head7>.diff
 # (named per range, so a re-review after fixes gets a distinct fresh file).
 # The repository is the one sdd-repo names; -C DIR runs as if started in DIR,
 # as in sdd-workspace.
