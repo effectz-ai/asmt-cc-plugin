@@ -28,6 +28,12 @@ description: Effectz.AI engineering conventions — repository layout, contracts
 
 <!-- What may be added without discussion, what may not. Ask the user. -->
 
+## Comments
+
+A comment says why, and only when the code cannot. Never restate the code.
+Never put a ticket id, PR number, or change history in a comment — git and
+the PR hold that.
+
 ## When a rule and the surrounding code disagree
 
 Say so. Do not silently follow either one. A rule that no longer matches the

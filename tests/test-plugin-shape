@@ -27,11 +27,54 @@ for s in $skills; do
     && ok "$rel: description is substantial" \
     || bad "$rel: description too short (${#desc} chars) — it is the trigger mechanism"
 
+  dir="$(basename "$(dirname "$s")")"
+  name="$(sed -n 's/^name: //p' "$s" | head -n 1)"
+  [ "$name" = "$dir" ] \
+    && ok "$rel: name matches its directory" \
+    || bad "$rel: name $name != directory $dir — the directory is the /asmt: command"
+
   lines=$(wc -l < "$s")
   [ "$lines" -le 500 ] \
     && ok "$rel: body within budget ($lines lines)" \
     || bad "$rel: $lines lines — split into references/"
 done
+
+# Ported text must not hand off to upstream skills or upstream paths: a stale
+# `superpowers:x` silently routes to a plugin the team does not have.
+stale=$(grep -rnE 'superpowers:|\.superpowers/|docs/superpowers' "$PLUGIN/skills" "$PLUGIN/hooks" 2>/dev/null)
+[ -z "$stale" ] \
+  && ok "no upstream skill names or paths left in skills/ or hooks/" \
+  || bad "upstream references left:"$'\n'"$stale"
+
+# Every asmt:<name> reference must name a skill that exists.
+for ref in $(grep -rhoE 'asmt:[a-z0-9-]+' "$PLUGIN/skills" 2>/dev/null | sort -u); do
+  [ -f "$PLUGIN/skills/${ref#asmt:}/SKILL.md" ] \
+    && ok "$ref resolves" || bad "$ref names no skill"
+done
+
+# land reads progress.md and design.md from the topic folder, so nothing
+# before land may delete it.
+deletes=$(grep -rnE 'rm -rf|delete this plan.s workspace' "$PLUGIN/skills/build" "$PLUGIN/skills/tdd" "$PLUGIN/skills/review" 2>/dev/null)
+[ -z "$deletes" ] \
+  && ok "build/review never delete the topic folder land needs" \
+  || bad "the topic folder is deleted before land:"$'\n'"$deletes"
+
+# The comment rule has to reach every agent that writes or reviews code.
+rule='A comment says why, and only when the code cannot.'
+for f in house-rules/SKILL.md build/implementer-prompt.md build/task-reviewer-prompt.md review/code-reviewer.md; do
+  grep -qF "$rule" "$PLUGIN/skills/$f" \
+    && ok "$f carries the comment rule" || bad "$f lacks the comment rule"
+done
+
+# Hook scripts must check out with LF everywhere, or bash chokes on \r.
+for f in "$PLUGIN/hooks/session-start" "$PLUGIN/hooks/pretooluse-guard" "$PLUGIN/bin/asmt-gate" "$PLUGIN/skills/build/scripts/sdd-workspace"; do
+  eol=$(git -C "$HERE/.." check-attr eol -- "${f#"$HERE/../"}" | sed 's/.*: //')
+  [ "$eol" = lf ] && ok "${f#"$PLUGIN/"} checks out as LF" || bad "${f#"$PLUGIN/"} eol is '$eol', not lf"
+done
+
+grep -q '"SessionStart"' "$PLUGIN/hooks/hooks.json" \
+  && ok "hooks.json registers SessionStart" \
+  || bad "hooks.json has no SessionStart hook — using-asmt is never injected"
 
 # Every ATTRIBUTION.md row must point at a file that exists, cite the SHA
 # pinned in vendor/UPSTREAM_SHAS for its upstream project, and (when a clone

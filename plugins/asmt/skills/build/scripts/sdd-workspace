@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# Print (and create) the directory holding one plan's build state: ledger,
+# task briefs, implementer reports, review packages.
+#
+# A plan written by asmt:plan lives at .asmt/work/<topic>/plan.md, and its
+# state lives beside it in that same topic folder. Any other plan file gets
+# .asmt/work/<plan-basename>/.
+#
+# .asmt/work/ is git-ignored by its own .gitignore, so it exists only in the
+# checkout that created it — the main one. A build running in a linked
+# worktree therefore still resolves to the main checkout's folder.
+#
+# Usage: sdd-workspace [-C DIR] PLAN_FILE
+set -euo pipefail
+
+if [ "${1:-}" = "-C" ]; then
+  [ -d "${2:-}" ] || { echo "bad -C directory: ${2:-}" >&2; exit 2; }
+  cd "$2"
+  shift 2
+fi
+
+if [ $# -ne 1 ]; then
+  echo "usage: sdd-workspace [-C DIR] PLAN_FILE" >&2
+  exit 2
+fi
+
+plan=$1
+[ -f "$plan" ] || { echo "no such plan file: $plan" >&2; exit 2; }
+
+plan_dir=$(CDPATH='' cd -- "$(dirname "$plan")" && pwd -P)
+
+case "$plan_dir" in
+  */.asmt/work/*)
+    dir=$plan_dir
+    base=${plan_dir%/.asmt/work/*}/.asmt/work
+    ;;
+  *)
+    # The main checkout is the parent of the shared git dir, whichever
+    # worktree we are standing in.
+    common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) \
+      || { echo "sdd-workspace: not inside a git repository ($PWD)" >&2; exit 2; }
+    root=$(CDPATH='' cd -- "$common/.." && pwd -P)
+    base=$root/.asmt/work
+    slug=$(basename "$plan" .md)
+    dir=$base/$slug
+    ;;
+esac
+
+mkdir -p "$dir"
+[ -e "$base/.gitignore" ] || printf '*\n' > "$base/.gitignore"
+
+# On Windows, print C:/... so PowerShell callers can resolve it too.
+CDPATH='' cd -- "$dir"
+if command -v cygpath >/dev/null 2>&1; then cygpath -m "$PWD"; else pwd; fi

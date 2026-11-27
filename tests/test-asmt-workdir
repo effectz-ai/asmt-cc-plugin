@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# asmt-workdir: one answer to "where does this topic's design/plan live",
+# from any checkout, and the folder never dirties the tree.
+set -uo pipefail
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+WD="$HERE/../plugins/asmt/bin/asmt-workdir"
+# shellcheck source=fixtures.sh
+. "$HERE/fixtures.sh"
+
+fails=0
+ok()  { printf 'ok   - %s\n' "$1"; }
+bad() { printf 'FAIL - %s\n' "$1"; fails=$((fails + 1)); }
+is()  { [ "$2" = "$3" ] && ok "$1" || bad "$1 (expected $3, got $2)"; }
+
+canon() {
+  local p
+  p="$(cd "$1" && pwd -P)" || { echo missing; return; }
+  if command -v cygpath >/dev/null 2>&1; then cygpath -m "$p"; else printf '%s\n' "$p"; fi
+}
+
+repo="$(new_repo)"
+
+d="$(cd "$repo" && bash "$WD" 2026-01-01-a)"
+is "prints the main checkout's topic folder" "$d" "$(canon "$repo/.asmt/work/2026-01-01-a")"
+is "the work folder ignores itself before anything else runs" "$(cat "$repo/.asmt/work/.gitignore" 2>/dev/null)" "*"
+printf 'design\n' > "$repo/.asmt/work/2026-01-01-a/design.md"
+is "a design in it leaves git status clean" "$(git -C "$repo" status --porcelain)" ""
+(cd "$repo" && bash "$HERE/../plugins/asmt/bin/asmt-gate" run >/dev/null 2>&1) \
+  && ok "the gate still runs with a design in progress" || bad "the gate refused a tree holding only .asmt/work"
+
+wt="$(mktemp -d)/wt"
+git -C "$repo" worktree add -q "$wt" -b side
+w="$(cd "$wt" && bash "$WD" 2026-01-01-a)"
+is "from a worktree, still the main checkout's folder" "$w" "$(canon "$repo/.asmt/work/2026-01-01-a")"
+
+(cd "$repo" && bash "$WD" >/dev/null 2>&1); rc=$?
+is "no topic is a usage error" "$rc" "2"
+(cd "$repo" && bash "$WD" ../escape >/dev/null 2>&1); rc=$?
+is "a topic with a slash is refused" "$rc" "2"
+
+[ "$fails" -eq 0 ] || printf '\n%s assertion(s) failed\n' "$fails"
+exit "$((fails > 0))"

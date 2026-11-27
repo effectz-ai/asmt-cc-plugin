@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# SessionStart hook: inject the using-asmt skill so ASMT skills fire reliably.
+
+set -euo pipefail
+
+# Determine plugin root directory.
+# Splits $0 on its last / or \ (run-hook.cmd's cmd half passes a Windows
+# path), with no separator meaning the current directory. This avoids
+# dirname because a SessionStart:startup hook can run with a broken/empty
+# PATH (anthropics/claude-code#43127) before any PATH-repairing sibling hook
+# in the same startup batch takes effect.
+#
+# No command substitution or pipe runs in this script: each one forks, and a
+# fork costs tens of milliseconds under Git Bash on Windows. The paths stay
+# relative to the current directory, which is all the file read below needs.
+case "$0" in
+  */*|*\\*) SCRIPT_DIR="${0%[/\\]*}" ;;
+  *) SCRIPT_DIR="." ;;
+esac
+PLUGIN_ROOT="${SCRIPT_DIR}/.."
+
+# Read using-asmt with the read builtin (no cat, for the same PATH-independence
+# reason, and no $(< file) subshell). read returns 1 at end of file, hence
+# || true; the loop drops trailing newlines as $(< file) did.
+skill_md="${PLUGIN_ROOT}/skills/using-asmt/SKILL.md"
+using_asmt_content="Error reading using-asmt skill"
+if [ -r "$skill_md" ]; then
+  IFS= read -r -d '' using_asmt_content < "$skill_md" || true
+  while [[ $using_asmt_content == *$'\n' ]]; do
+    using_asmt_content="${using_asmt_content%$'\n'}"
+  done
+fi
+
+# Escape string for JSON embedding using bash parameter substitution.
+# Each ${s//old/new} is a single C-level pass - orders of magnitude
+# faster than the character-by-character loop this replaces. The result
+# goes to a variable instead of stdout, so no $(...) subshell is needed.
+escape_for_json() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\n'/\\n}"
+    s="${s//$'\r'/\\r}"
+    s="${s//$'\t'/\\t}"
+    using_asmt_escaped="$s"
+}
+
+escape_for_json "$using_asmt_content"
+session_context="<EXTREMELY_IMPORTANT>\nYou have the ASMT workflow.\n\n**Below is the full content of your 'asmt:using-asmt' skill - your introduction to using skills. For all other skills, use the 'Skill' tool:**\n\n${using_asmt_escaped}\n</EXTREMELY_IMPORTANT>"
+
+# Claude Code expects hookSpecificOutput.additionalContext. printf, not a
+# heredoc: bash 5.3+ can hang on heredocs here (obra/superpowers#571).
+#
+# On Windows + Git Bash the harness can close stdout before printf finishes,
+# and printf reports that EPIPE as a write error; swallow it rather than
+# printing a startup diagnostic every session.
+emit_json() {
+  trap '' PIPE
+  # shellcheck disable=SC2059 # every caller passes a literal format string
+  printf "$@" 2>/dev/null || true
+}
+
+emit_json '{\n  "hookSpecificOutput": {\n    "hookEventName": "SessionStart",\n    "additionalContext": "%s"\n  }\n}\n' "$session_context"
+
+exit 0
