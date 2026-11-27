@@ -1,20 +1,20 @@
 ---
 name: plan
-description: Use when you have a spec or requirements for a multi-step task, before touching code
+description: Use when an approved asmt:spec design (or other spec or requirements for a multi-step task) exists and needs breaking into tasks, before touching code — including "plan this out" or "what are the tasks"
 ---
 
-# Writing Plans
+# Plan a change
 
 ## Overview
 
 Write implementation plans for an engineer who has not seen this codebase or this spec. Assume they write idiomatic code in the project's language once they know the exact interface and the exact test, and that they will make a reasonable choice wherever the plan leaves one open. What they cannot know is what you decided: which files, which names and signatures, which values from the spec, which tests prove each task. Document those. Give them the whole plan as bite-sized tasks. DRY. YAGNI. TDD. Frequent commits.
 
-**Announce at start:** "I'm using the writing-plans skill to create the implementation plan."
+**Announce at start:** "I'm using asmt:plan to create the implementation plan."
 
 **Context:** If working in an isolated worktree, it should have been created via the `asmt:worktrees` skill at execution time.
 
-**Save plans to:** `.asmt/work/YYYY-MM-DD-<topic>/plan.md`
-- (User preferences for plan location override this default)
+**Save plans to:** `.asmt/work/YYYY-MM-DD-<topic>/plan.md` — the same topic folder as the design. Never commit it.
+- First, read `.asmt/config.yml`. If it is missing, stop: this repo needs one (see the plugin README). If `version` is not `2`, stop and tell the user to set `version: 2` and delete `modes`, `size_classes`, `default_size_class`, and `paths`. Missing `docs` means `pr`; missing `tests` means `focused`; any other value for either, stop and name it.
 
 ## Scope Check
 
@@ -38,7 +38,8 @@ fresh reviewer's gate. When drawing task boundaries: fold setup,
 configuration, scaffolding, and documentation steps into the task whose
 deliverable needs them; split only where a reviewer could meaningfully
 reject one task while approving its neighbor. Each task ends with an
-independently testable deliverable.
+independently testable deliverable. No documentation task unless the
+design asks for a documentation change.
 
 ## Step Granularity
 
@@ -56,7 +57,7 @@ independently testable deliverable.
 ```markdown
 # [Feature Name] Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use asmt:build (recommended) or asmt:build (inline mode) to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use asmt:build (subagents or inline mode) to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** [One sentence describing what this builds]
 
@@ -138,6 +139,10 @@ git commit -m "feat: add specific feature"
 ````
 
 ## What a Step Contains
+
+Test steps exist only where the `tests` mode in `.asmt/config.yml` says the
+behaviour gets a test (see asmt:tdd). Untested work gets a `Check by hand:`
+line in its task instead: what to run or click, and what to see.
 
 A step is done when the implementer can write exactly one reasonable thing
 from it. That is the whole requirement: unambiguous, not complete. Each kind

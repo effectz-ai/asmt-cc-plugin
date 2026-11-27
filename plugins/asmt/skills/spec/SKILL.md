@@ -1,9 +1,9 @@
 ---
 name: spec
-description: "You MUST use this before any creative work - creating features, building components, adding functionality, modifying behavior, or planning anything new, in software or out of it (a talk, a business, a renovation)."
+description: "You MUST use this before any creative work - starting a card, ticket, or feature, creating features, building components, adding functionality, modifying behavior, or planning anything new. Produces an approved design before any code."
 ---
 
-# Brainstorming
+# Spec: design before code
 
 You are very good at building. You build what you believe your human
 partner wants, and that belief is usually thinner than it feels. This
@@ -16,7 +16,9 @@ hundred decisions they never mention the way they would have made them.
 
 ## First: What Do You Actually Know?
 
-Before you reply, ask yourself: what do I know about what they want, and
+Read `.asmt/config.yml`. If it is missing, stop: this repo needs one (see the plugin README). If `version` is not `2`, stop and tell the user to set `version: 2` and delete `modes`, `size_classes`, `default_size_class`, and `paths`. Missing `docs` means `pr`; missing `tests` means `focused`; any other value for either, stop and name it.
+
+Then, before you reply, ask yourself: what do I know about what they want, and
 why?
 
 - **Everything that matters is in the request** ("make the icon cornflower
@@ -83,7 +85,7 @@ Move the work forward, with one of these:
   different site. What do you want someone to do when they land on it?"
 
 How the message ends depends on whether their message asked for
-brainstorming:
+a design conversation:
 
 - **They asked for it** (by name, by invoking it, or by asking for a
   design discussion): end there. They want this conversation.
@@ -167,17 +169,9 @@ next one. This is for how it gets built; for what they want, get them
 describing first.
 
 **Show, don't tell.** Whenever seeing would help more than reading,
-sketch it in text: a few lines of what they'd see. Offer the visual
-companion (below) when the look itself is theirs to decide:
-
-- something they'll look at: a screen, a page, a printout, a sign
-- a layout or arrangement: of a screen, a room, a schedule
-- a flow or a sequence of steps
-- options that would look different from each other
-- a structure that's easier to see than read: a diagram, a timeline, a map
-
-Once they've accepted, use it for mockups to react to, side-by-side
-options, and throwaway prototypes they can click.
+sketch it in text: a few lines of what they'd see. That covers screens,
+layouts, flows, options that would look different from each other, and
+structures easier to see than read.
 
 **Spike to feel things out.** Agentic work is waterfall, but very, very
 fast. A quick throwaway build is often the cheapest way to learn what
@@ -201,10 +195,7 @@ or missing.
 
 Before you send a chunk, check it: does it describe something they'll
 look at, like a page, a screen, a schedule, or a printout? If so, put a
-text sketch next to the description. If the look itself is theirs to
-decide and they haven't seen the visual companion offer yet, send the
-offer instead (its own message, below) and hold the chunk for the next
-message. Once they've accepted, put a mockup next to the description.
+text sketch next to the description.
 
 ## Size the Work
 
@@ -224,7 +215,7 @@ the doc.
 If it grows mid-task, stop, say so, and step up a size.
 
 If this is really several independent projects, say so, agree on an
-order, and brainstorm them one at a time.
+order, and spec them one at a time.
 
 ## The Written Design
 
@@ -242,10 +233,13 @@ For a small change, the short design covers the same points in a line
 or two each and goes straight to your human partner, without the
 builder check.
 
-**Where it goes:** in a software repo,
-`docs/asmt/specs/YYYY-MM-DD-<topic>.md` (committed) or `.asmt/work/YYYY-MM-DD-<topic>/design.md` (not committed), per `docs` in `.asmt/config.yml`.
-Otherwise, pick a sensible place and say where. Your human partner's
-preferences override both.
+**Where it goes** depends on `docs` in `.asmt/config.yml`:
+
+- `docs: pr` (default): `.asmt/work/YYYY-MM-DD-<topic>/design.md`. Never
+  committed; `asmt:land` puts it in the PR description.
+- `docs: repo`: `docs/asmt/specs/YYYY-MM-DD-<topic>.md`, committed.
+
+The plan goes in the same `.asmt/work/YYYY-MM-DD-<topic>/` folder either way.
 
 **Builder check** (for a project): dispatch a fresh subagent with
 `builder-check-prompt.md` in this directory. When you tell your human
@@ -267,7 +261,9 @@ round of questions the check produces. Without a subagent tool, read the
 document as that builder yourself.
 
 <HARD-GATE>
-Nothing gets built until your human partner approves the design doc:
+Nothing gets built until your human partner — the developer in this
+session — approves the design doc. No one else signs off and no sign-off
+line is written; the team weighs in at PR review. That means
 the short one for a small change, the full one for a project.
 Building includes writing product code, scaffolding, installing
 dependencies, creating projects, and invoking an implementation skill.
@@ -292,25 +288,3 @@ asmt:plan and no other skill.
 | "I should explain the process first" | Ask your question. The process shows itself. |
 | "They said 'sounds good' to the idea" | Approval covers what you showed them. A design doc you haven't written isn't approved. |
 | "The spike works, I'll keep building on it" | Keeping it is a new request. Back through the gate. |
-
-## Visual Companion
-
-A browser tab for showing mockups, diagrams, and prototypes. It's a
-tool, not a mode: accepting it doesn't send every question to the
-browser.
-
-**Offer it just-in-time.** Offer it the first time one of the moments
-above comes up, never upfront. The offer is its own message with nothing
-else in it:
-
-> "This might be easier if I show you. Want me to open a browser tab with some mockups?"
-
-If they decline, stay in text and don't offer again unless they raise it.
-
-**Per question, ask: would they understand this better by seeing it?**
-Mockups, layouts, diagrams, and side-by-side designs go in the browser.
-Requirements, scope, tradeoffs, and conceptual choices stay in text. A
-question about a UI topic isn't automatically a visual question.
-
-If they accept, read `visual-companion.md` in this directory before
-starting the server.
