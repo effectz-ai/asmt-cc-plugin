@@ -33,7 +33,9 @@ Subagent (general-purpose):
 
     Once you're clear on requirements:
     1. Implement exactly what the task specifies
-    2. Write tests (following TDD if task says to)
+    2. Write tests only where the `tests` mode in `.asmt/config.yml` says
+       the behaviour gets one (see asmt:tdd), test-first. Tests beyond the
+       mode are scope creep.
     3. Verify implementation works
     4. Commit your work
     5. Self-review (see below)
@@ -134,6 +136,8 @@ Subagent (general-purpose):
       - RED: command run, relevant failing output before implementation, and why the failure was expected
       - GREEN: command run and relevant passing output after implementation
     - Files changed
+    - `Check by hand: <what to run or click, what to see>` for anything the
+      mode left untested, or `Check by hand: none`
     - Self-review findings (if any)
     - Any issues or concerns
 
@@ -142,6 +146,7 @@ Subagent (general-purpose):
     - **Status:** DONE | DONE_WITH_CONCERNS | BLOCKED | NEEDS_CONTEXT
     - Commits created (short SHA + subject)
     - One-line test summary (e.g. "14/14 passing, output pristine")
+    - Your `Check by hand:` line
     - Your concerns, if any
     - The report file path
 

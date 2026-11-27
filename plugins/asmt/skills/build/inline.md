@@ -1,4 +1,7 @@
-# Executing Plans
+# Building inline
+
+Part of asmt:build: the inline (native) mode, where you implement every task
+yourself. No bookkeeping commits; never commit anything under `.asmt/work/`.
 
 Execute the plan yourself, task by task, in this session: no implementer
 subagent per task, no reviewer per task. One fresh-context review of the
@@ -44,15 +47,15 @@ those, stop and ask.
 - Your harness has no subagent tool (see the per-platform references in
   `../using-asmt/references/`). Never fabricate a dispatch; run
   the plan here.
-- Tasks are mostly independent — the same precondition as
-  asmt:build.
+- Tasks are mostly independent — the same precondition as the
+  subagent mode.
 
 A fully specified plan makes inline execution transcription plus testing:
 it runs well on a mid-tier session model, and the one place the most
 capable model earns its cost is the final review, which this skill
 dispatches separately. Tell your human partner so when they choose inline.
 
-Prefer asmt:build when your human partner
+Prefer subagent mode (asmt:build's main loop) when your human partner
 wants a review gate on every task, or when the plan is long enough that
 its later tasks would run on a compacted context. Inline execution over a
 long plan still works — the ledger is what makes it recoverable — but the
@@ -165,7 +168,7 @@ in the workspace and read its tail; read a brief, not the whole plan.
 
 ### 1. Take the task
 
-- Run this skill's `scripts/task-start PLAN_FILE N` by its absolute path,
+- Run `scripts/task-start PLAN_FILE N` by its absolute path,
   from the working tree you're executing in. It prints the brief
   path and BASE (the commit the task's range is cut from) in one call.
   Read the brief for every task, including ones you remember from setup:
@@ -218,7 +221,7 @@ the claim. If any item is missing, the task is not complete: finish it.
 
 ### 4. Complete the task
 
-Run this skill's `scripts/task-done PLAN_FILE N BASE -- <test command>`
+Run `scripts/task-done PLAN_FILE N BASE -- <test command>`
 by its absolute path, from the working tree you're executing in, with the test command the brief names for the whole task. It runs the
 tests, keeps the full output in the workspace, prints the tail, and — only
 if they pass — appends the completion line to the ledger:
@@ -227,6 +230,10 @@ if they pass — appends the completion line to the ledger:
 
 A failing run records nothing; the task is not complete. When it records,
 mark the todo complete and take the next task.
+
+Then append the task's `Check by hand (Task <N>): <item>` line to the ledger
+for anything the `tests` mode left untested (skip it when there is nothing to
+check). asmt:land puts these lines in the PR.
 
 ## Final Review
 

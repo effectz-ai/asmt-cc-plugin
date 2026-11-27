@@ -1,9 +1,15 @@
 ---
 name: build
-description: Use when executing implementation plans with independent tasks in the current session
+description: Use when executing an asmt:plan plan task by task — with a subagent per task, or inline when that was chosen or no subagent tool exists. Includes "carry on with the build" and "do the next task".
 ---
 
-# Subagent-Driven Development
+# Build a plan
+
+Read `.asmt/config.yml`. If it is missing, stop: this repo needs one (see the plugin README). If `version` is not `2`, stop and tell the user to set `version: 2` and delete `modes`, `size_classes`, `default_size_class`, and `paths`. Missing `docs` means `pr`; missing `tests` means `focused`; any other value for either, stop and name it.
+
+**Inline mode.** When the plan handoff chose inline (native) execution, or no subagent tool exists, follow [inline.md](inline.md) in this directory instead of the subagent loop below. Its ledger, workspace, and check-by-hand rules are the same.
+
+**No bookkeeping commits.** Commits are task work and review fixes only. Never commit `plan.md`, `progress.md`, or anything else under `.asmt/work/`.
 
 Execute plan by dispatching a fresh implementer subagent per task, a task review (spec compliance + code quality) after each, and a broad whole-branch review at the end.
 
@@ -113,7 +119,8 @@ a ledger file, not only in todos.
 - Each plan owns a workspace: at skill start, run this skill's
   `bash scripts/sdd-workspace PLAN_FILE` by its absolute path, from the
   working tree you're executing in — it prints the plan's git-ignored
-  directory (under `<repo-root>/.asmt/work/`), home to
+  directory — the plan's own `.asmt/work/<topic>/` folder in the main
+  checkout — home to
   every artifact for THIS plan: ledger, briefs, reports, review packages.
   Another plan's directory is never yours to read or write.
 - Check for this plan's ledger at `<workspace>/progress.md`. If one exists,
@@ -313,6 +320,10 @@ message as your other bookkeeping:
 - `Task <N>: complete (commits <base7>..<head7>, review clean)`
 - `Task <N>: complete (commits <base7>..<head7>, <K> parked)` after a
   tripped breaker
+
+In the same message, copy the implementer's `Check by hand:` line into the
+ledger as `Check by hand (Task <N>): <item>` unless it is `none`. asmt:land
+puts these lines in the PR.
 
 Then mark the todo complete and move on. Never move to the next task while
 the review has open Critical/Important issues that are neither fixed nor
