@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# The SessionStart hook injects using-asmt as valid Claude Code hook JSON.
+set -uo pipefail
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+PLUGIN="$HERE/../plugins/asmt"
+
+fails=0
+ok()   { printf 'ok   - %s\n' "$1"; }
+bad()  { printf 'FAIL - %s\n' "$1"; fails=$((fails + 1)); }
+skip() { printf 'skip - %s\n' "$1"; }
+
+out="$(CLAUDE_PLUGIN_ROOT="$PLUGIN" bash "$PLUGIN/hooks/session-start")"
+rc=$?
+
+[ "$rc" -eq 0 ] && ok "exits 0" || bad "exits $rc"
+printf '%s' "$out" | grep -qE '"hookEventName":[[:space:]]*"SessionStart"' \
+  && ok "emits a SessionStart hookSpecificOutput" || bad "no SessionStart hookSpecificOutput"
+printf '%s' "$out" | grep -q 'name: using-asmt' \
+  && ok "carries the using-asmt skill" || bad "using-asmt body missing"
+printf '%s' "$out" | grep -q 'You have superpowers' \
+  && bad "still announces Superpowers" || ok "announces ASMT, not Superpowers"
+
+py="$(command -v python3 || command -v python || true)"
+# The Windows Store stub named python exists but runs nothing; probe it.
+if [ -n "$py" ] && "$py" -c 'pass' >/dev/null 2>&1; then
+  printf '%s' "$out" | "$py" -c 'import json,sys; json.load(sys.stdin)' \
+    && ok "output is valid JSON" || bad "output is not valid JSON"
+elif command -v node >/dev/null 2>&1; then
+  printf '%s' "$out" | node -e 'JSON.parse(require("fs").readFileSync(0,"utf8"))' \
+    && ok "output is valid JSON" || bad "output is not valid JSON"
+else
+  skip "JSON validity unchecked — no python or node on PATH"
+fi
+
+[ "$fails" -eq 0 ] || printf '\n%s assertion(s) failed\n' "$fails"
+exit "$((fails > 0))"

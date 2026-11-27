@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SessionStart hook for superpowers plugin
+# SessionStart hook: inject the using-asmt skill so ASMT skills fire reliably.
 
 set -euo pipefail
 
@@ -19,15 +19,15 @@ case "$0" in
 esac
 PLUGIN_ROOT="${SCRIPT_DIR}/.."
 
-# Read using-superpowers content with the read builtin (no cat, for the same
-# PATH-independence reason, and no $(< file) subshell). read returns 1 at end
-# of file, hence || true; the loop drops trailing newlines as $(< file) did.
-skill_md="${PLUGIN_ROOT}/skills/using-superpowers/SKILL.md"
-using_superpowers_content="Error reading using-superpowers skill"
+# Read using-asmt with the read builtin (no cat, for the same PATH-independence
+# reason, and no $(< file) subshell). read returns 1 at end of file, hence
+# || true; the loop drops trailing newlines as $(< file) did.
+skill_md="${PLUGIN_ROOT}/skills/using-asmt/SKILL.md"
+using_asmt_content="Error reading using-asmt skill"
 if [ -r "$skill_md" ]; then
-  IFS= read -r -d '' using_superpowers_content < "$skill_md" || true
-  while [[ $using_superpowers_content == *$'\n' ]]; do
-    using_superpowers_content="${using_superpowers_content%$'\n'}"
+  IFS= read -r -d '' using_asmt_content < "$skill_md" || true
+  while [[ $using_asmt_content == *$'\n' ]]; do
+    using_asmt_content="${using_asmt_content%$'\n'}"
   done
 fi
 
@@ -42,49 +42,24 @@ escape_for_json() {
     s="${s//$'\n'/\\n}"
     s="${s//$'\r'/\\r}"
     s="${s//$'\t'/\\t}"
-    using_superpowers_escaped="$s"
+    using_asmt_escaped="$s"
 }
 
-escape_for_json "$using_superpowers_content"
-session_context="<EXTREMELY_IMPORTANT>\nYou have superpowers.\n\n**Below is the full content of your 'asmt:using-asmt' skill - your introduction to using skills. For all other skills, use the 'Skill' tool:**\n\n${using_superpowers_escaped}\n</EXTREMELY_IMPORTANT>"
+escape_for_json "$using_asmt_content"
+session_context="<EXTREMELY_IMPORTANT>\nYou have the ASMT workflow.\n\n**Below is the full content of your 'asmt:using-asmt' skill - your introduction to using skills. For all other skills, use the 'Skill' tool:**\n\n${using_asmt_escaped}\n</EXTREMELY_IMPORTANT>"
 
-# Output context injection as JSON.
-# Cursor hooks expect additional_context (snake_case).
-# Claude Code hooks expect hookSpecificOutput.additionalContext (nested).
-# Copilot CLI (v1.0.11+) and others expect additionalContext (top-level, SDK standard).
-# Claude Code reads BOTH additional_context and hookSpecificOutput without
-# deduplication, so we must emit only the field the current platform consumes.
-# Muse sets MUSE_PLUGIN_ROOT and expects additionalContext (SDK standard).
+# Claude Code expects hookSpecificOutput.additionalContext. printf, not a
+# heredoc: bash 5.3+ can hang on heredocs here (obra/superpowers#571).
 #
-# Uses printf instead of heredoc to work around bash 5.3+ heredoc hang.
-# See: https://github.com/obra/superpowers/issues/571
-#
-# emit_json absorbs EPIPE without a pipe through `cat`. On Windows + Git
-# Bash, the harness can close the hook's stdout before printf finishes, and
-# Git Bash's printf reports that EPIPE as "printf: write error: Permission
-# denied", which `set -euo pipefail` would let escape as a startup diagnostic
-# every session (#1612). SIGPIPE is ignored so other platforms see the same
-# EPIPE error instead of a signal; the error message is dropped and the
-# status ignored. No external command is involved, so a broken PATH (#2310)
-# changes nothing.
+# On Windows + Git Bash the harness can close stdout before printf finishes,
+# and printf reports that EPIPE as a write error; swallow it rather than
+# printing a startup diagnostic every session.
 emit_json() {
   trap '' PIPE
   # shellcheck disable=SC2059 # every caller passes a literal format string
   printf "$@" 2>/dev/null || true
 }
 
-if [ -n "${CURSOR_PLUGIN_ROOT:-}" ]; then
-  # Cursor sets CURSOR_PLUGIN_ROOT (may also set CLAUDE_PLUGIN_ROOT)
-  emit_json '{\n  "additional_context": "%s"\n}\n' "$session_context"
-elif [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -z "${COPILOT_CLI:-}" ] && [ -z "${MUSE_PLUGIN_ROOT:-}" ]; then
-  # Claude Code sets CLAUDE_PLUGIN_ROOT without COPILOT_CLI/MUSE_PLUGIN_ROOT
-  emit_json '{\n  "hookSpecificOutput": {\n    "hookEventName": "SessionStart",\n    "additionalContext": "%s"\n  }\n}\n' "$session_context"
-elif [ -n "${MUSE_PLUGIN_ROOT:-}" ]; then
-  # Muse sets MUSE_PLUGIN_ROOT — try Claude-style nested output for Muse Spark
-  emit_json '{\n  "hookSpecificOutput": {\n    "hookEventName": "SessionStart",\n    "additionalContext": "%s"\n  }\n}\n' "$session_context"
-else
-  # Copilot CLI (sets COPILOT_CLI=1) or unknown platform — SDK standard format
-  emit_json '{\n  "additionalContext": "%s"\n}\n' "$session_context"
-fi
+emit_json '{\n  "hookSpecificOutput": {\n    "hookEventName": "SessionStart",\n    "additionalContext": "%s"\n  }\n}\n' "$session_context"
 
 exit 0
