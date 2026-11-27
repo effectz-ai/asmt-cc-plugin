@@ -1,6 +1,25 @@
 # Changelog
 
-## Unreleased
+## 2.0.0
+
+The workflow is now a fork of Superpowers 7.0.2 under ASMT command names.
+v1 produced too many commits, tests, spec files and comments; v2 keeps
+planning state out of git and sets test volume per repo.
+
+- **Commands:** `spec` (design), `plan`, `build` (subagents or inline),
+  `tdd`, `verify`, `review`, `land`, plus `debug`, `worktrees`, `parallel`.
+  `using-asmt` is injected at session start.
+- **Config v2:** `version: 2`, `docs: pr | repo`, `tests: strict | focused |
+  light`, `verify`. Removed: `modes`, `size_classes`, `default_size_class`,
+  `paths`. A v1 config makes every entry skill stop with what to change.
+- **No bookkeeping commits.** Design (under `docs: pr`), plan and progress
+  live in the git-ignored `.asmt/work/<topic>/`; `land` puts the design and
+  the check-by-hand list in the PR and deletes the folder.
+- **Removed:** `spec-grammar`, `task-grammar`, `tdd-loop`, `asmt-plan`,
+  `REQ-n.m` test-name ids, living specs and size classes.
+- **Kept:** `asmt-gate` receipts and the PR guard hook.
+
+## 1.x
 
 - Initial plugin skeleton: marketplace + plugin manifests.
 - PreToolUse guard (`hooks/pretooluse-guard`) blocks `gh pr create` on
